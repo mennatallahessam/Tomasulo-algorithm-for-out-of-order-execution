@@ -341,13 +341,6 @@ Documented here so results are interpreted correctly:
 
 ## Authors
 
-Original authors:
-
-- **Omar Abdelhady**: [@3-bhd](https://github.com/3-bhd)
-- **Muhammad Yasser Elghazaly**: [@my612](https://github.com/my612)
-
-Maintained by:
-
-- **Mennatallah Essam**: [@mennatallahessam](https://github.com/mennatallahessam) (GUI redesign, display bug fixes, README, and repository maintenance)
+**Mennatallah Essam**: [@mennatallahessam](https://github.com/mennatallahessam) (GUI redesign, display bug fixes, README, and repository maintenance)
 
 The American University in Cairo, Computer Architecture Course
