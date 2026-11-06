@@ -152,6 +152,10 @@ Whitespace-separated `address value` pairs (one per line):
 
 ## Quick Start (Web Studio & CLI)
 
+### Option 0: Open the Live Deployed Web Studio (No Installation Needed)
+
+👉 **[https://mennatallahessam.github.io/Tomasulo-algorithm-for-out-of-order-execution/](https://mennatallahessam.github.io/Tomasulo-algorithm-for-out-of-order-execution/)**
+
 ### 1. Clone the Repository
 
 ```bash
@@ -333,6 +337,8 @@ npm test
 ---
 
 ## CI/CD & GitHub Pages Deployment
+
+**Live Deployment URL:** [https://mennatallahessam.github.io/Tomasulo-algorithm-for-out-of-order-execution/](https://mennatallahessam.github.io/Tomasulo-algorithm-for-out-of-order-execution/)
 
 The GitHub Actions workflow in [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) runs automatically on every push to `main` (and via manual `workflow_dispatch`):
 
