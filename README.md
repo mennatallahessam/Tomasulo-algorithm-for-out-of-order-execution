@@ -1,4 +1,4 @@
-﻿# Tomasulo Algorithm Simulator
+# Tomasulo Algorithm Simulator
 
 > Out-of-order execution simulator with a Tkinter GUI: register renaming, reservation stations, a Common Data Bus, and instruction-level parallelism.
 
@@ -341,7 +341,13 @@ Documented here so results are interpreted correctly:
 
 ## Authors
 
+Original authors:
+
 - **Omar Abdelhady**: [@3-bhd](https://github.com/3-bhd)
 - **Muhammad Yasser Elghazaly**: [@my612](https://github.com/my612)
+
+Maintained by:
+
+- **Mennatallah Essam**: [@mennatallahessam](https://github.com/mennatallahessam) (README, documentation and repository maintenance)
 
 The American University in Cairo, Computer Architecture Course
