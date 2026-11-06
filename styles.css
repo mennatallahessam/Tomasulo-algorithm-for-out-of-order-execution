@@ -638,6 +638,26 @@ input[type="number"] {
   padding: 20px !important;
 }
 
+/* Config Grid */
+.config-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.config-item {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.86rem;
+}
+
 /* Footer */
 .app-footer {
   display: flex;
@@ -654,3 +674,4 @@ input[type="number"] {
   color: var(--accent);
   text-decoration: none;
 }
+

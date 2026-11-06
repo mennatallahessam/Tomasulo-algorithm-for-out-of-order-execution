@@ -3,7 +3,7 @@
  * Author: Mennatallah Essam (@mennatallahessam)
  */
 
-import { TomasuloEngine } from "./engine.js";
+import { TomasuloEngine, DEFAULT_LATENCIES } from "./engine.js";
 import { SAMPLE_PROGRAMS, DEFAULT_MEMORY_TEXT } from "./presets.js";
 
 class TomasuloWebApp {
@@ -20,6 +20,7 @@ class TomasuloWebApp {
 
   _cacheElements() {
     this.elPresetSelect = document.getElementById("preset-select");
+    this.elFetchModeSelect = document.getElementById("fetch-mode-select");
     this.elProgramUpload = document.getElementById("program-upload");
     this.elMemoryUpload = document.getElementById("memory-upload");
     this.elProgramEditor = document.getElementById("program-editor");
@@ -40,6 +41,7 @@ class TomasuloWebApp {
     this.kpiQueue = document.getElementById("kpi-queue");
     this.kpiPc = document.getElementById("kpi-pc");
     this.elCdbBanner = document.getElementById("cdb-banner");
+    this.elLatencyHint = document.getElementById("latency-summary-hint");
 
     this.elRsBody = document.getElementById("rs-tbody");
     this.elRegGrid = document.getElementById("register-grid");
@@ -53,11 +55,26 @@ class TomasuloWebApp {
     this.elMemNonzero = document.getElementById("mem-nonzero");
     this.btnMemInspect = document.getElementById("btn-mem-inspect");
     this.elMemBody = document.getElementById("memory-tbody");
+
+    this.elLatLoad = document.getElementById("lat-load");
+    this.elLatStore = document.getElementById("lat-store");
+    this.elLatBeq = document.getElementById("lat-beq");
+    this.elLatCall = document.getElementById("lat-call");
+    this.elLatAdd = document.getElementById("lat-add");
+    this.elLatNor = document.getElementById("lat-nor");
+    this.elLatMul = document.getElementById("lat-mul");
+    this.btnApplyLatencies = document.getElementById("btn-apply-latencies");
+    this.btnDefaultLatencies = document.getElementById("btn-default-latencies");
   }
 
   _bindEvents() {
     this.elPresetSelect.addEventListener("change", (e) => {
       this._loadPreset(e.target.value);
+      this.initializeSimulation();
+    });
+
+    this.elFetchModeSelect.addEventListener("change", (e) => {
+      this.engine.setFetchMode(e.target.value);
       this.initializeSimulation();
     });
 
@@ -92,6 +109,33 @@ class TomasuloWebApp {
     this.btnMemInspect.addEventListener("click", () => this.renderMemoryTable());
     this.elMemNonzero.addEventListener("change", () => this.renderMemoryTable());
 
+    this.btnApplyLatencies.addEventListener("click", () => {
+      this.engine.setLatencies({
+        LOAD: Math.max(1, parseInt(this.elLatLoad.value, 10) || 6),
+        STORE: Math.max(1, parseInt(this.elLatStore.value, 10) || 6),
+        BEQ: Math.max(1, parseInt(this.elLatBeq.value, 10) || 1),
+        CALL_RET: Math.max(1, parseInt(this.elLatCall.value, 10) || 1),
+        ADD_SUB: Math.max(1, parseInt(this.elLatAdd.value, 10) || 2),
+        NOR: Math.max(1, parseInt(this.elLatNor.value, 10) || 1),
+        MUL: Math.max(1, parseInt(this.elLatMul.value, 10) || 10),
+      });
+      this._updateLatencyHint();
+      this.initializeSimulation();
+    });
+
+    this.btnDefaultLatencies.addEventListener("click", () => {
+      this.elLatLoad.value = String(DEFAULT_LATENCIES.LOAD);
+      this.elLatStore.value = String(DEFAULT_LATENCIES.STORE);
+      this.elLatBeq.value = String(DEFAULT_LATENCIES.BEQ);
+      this.elLatCall.value = String(DEFAULT_LATENCIES.CALL_RET);
+      this.elLatAdd.value = String(DEFAULT_LATENCIES.ADD_SUB);
+      this.elLatNor.value = String(DEFAULT_LATENCIES.NOR);
+      this.elLatMul.value = String(DEFAULT_LATENCIES.MUL);
+      this.engine.setLatencies({ ...DEFAULT_LATENCIES });
+      this._updateLatencyHint();
+      this.initializeSimulation();
+    });
+
     document.querySelectorAll("[data-mem-range]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const [start, end] = btn.dataset.memRange.split("-").map(Number);
@@ -115,6 +159,13 @@ class TomasuloWebApp {
     });
 
     window.addEventListener("resize", () => this.renderTimingChart());
+  }
+
+  _updateLatencyHint() {
+    const L = this.engine.latencies;
+    if (this.elLatencyHint) {
+      this.elLatencyHint.textContent = `LRS(${L.LOAD}c) • SRS(${L.STORE}c) • BEQ(${L.BEQ}c) • CALL/RET(${L.CALL_RET}c) • ADD/SUB(${L.ADD_SUB}c) • NOR(${L.NOR}c) • MUL(${L.MUL}c)`;
+    }
   }
 
   _loadPreset(presetName) {
@@ -167,10 +218,12 @@ class TomasuloWebApp {
 
   initializeSimulation() {
     this.stopAutoPlay();
+    this.engine.setFetchMode(this.elFetchModeSelect.value);
     this.engine.reset();
     this.engine.loadMemoryFromText(this.elMemoryEditor.value);
     this.engine.loadProgramFromText(this.elProgramEditor.value);
     this.initialized = true;
+    this._updateLatencyHint();
     this.renderAll();
   }
 
@@ -231,7 +284,7 @@ class TomasuloWebApp {
     this.kpiCompleted.textContent = String(this.engine.instructionsCompleted);
     this.kpiIpc.textContent = this.engine.calculateIpc().toFixed(2);
     this.kpiBranchAcc.textContent = `${this.engine.branchPredictionAccuracy().toFixed(1)}%`;
-    this.kpiQueue.textContent = String(this.engine.instructionQueue.length);
+    this.kpiQueue.textContent = String(this.engine.remainingQueueCount());
     this.kpiPc.textContent = String(this.engine.pc);
 
     const cdb = this.engine.cdb.peek();
@@ -380,7 +433,6 @@ class TomasuloWebApp {
     const plotWidth = Math.max(100, width - leftPad - rightPad);
     const xForCycle = (c) => leftPad + (c / maxCycle) * plotWidth;
 
-    // Draw vertical cycle grid lines
     ctx.strokeStyle = "#1e293b";
     ctx.lineWidth = 1;
     ctx.font = "11px Consolas, monospace";
@@ -397,7 +449,6 @@ class TomasuloWebApp {
       ctx.fillText(String(c), x, headerHeight - 12);
     }
 
-    // Draw rows
     records.forEach((rec, idx) => {
       const yCenter = headerHeight + idx * rowHeight + rowHeight / 2;
 
@@ -406,13 +457,11 @@ class TomasuloWebApp {
         ctx.fillRect(0, headerHeight + idx * rowHeight, width, rowHeight);
       }
 
-      // Label
       ctx.fillStyle = "#e2e8f0";
       ctx.font = "11px Consolas, monospace";
       ctx.textAlign = "left";
       ctx.fillText(`${idx + 1}. ${rec.instruction}`, 10, yCenter + 4);
 
-      // Execute span bar
       if (rec.executeStart !== null) {
         const endC = rec.executeComplete ?? this.engine.totalCycles;
         const x1 = xForCycle(rec.executeStart);
@@ -423,7 +472,6 @@ class TomasuloWebApp {
         ctx.fill();
       }
 
-      // Issue marker (sky circle)
       if (rec.issue !== null) {
         const xi = xForCycle(rec.issue);
         ctx.fillStyle = "#38bdf8";
@@ -432,7 +480,6 @@ class TomasuloWebApp {
         ctx.fill();
       }
 
-      // Writeback marker (emerald diamond)
       if (rec.writeback !== null) {
         const xw = xForCycle(rec.writeback);
         ctx.fillStyle = "#22c55e";

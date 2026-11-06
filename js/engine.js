@@ -1,9 +1,12 @@
 /**
  * Tomasulo Algorithm Simulator — Core Simulation Engine
+ * Supports both Sequential Queue Issue Mode and Dynamic PC Control-Flow Mode,
+ * plus configurable functional-unit latencies.
+ *
  * Author: Mennatallah Essam (@mennatallahessam)
  */
 
-import { OPCODES, parseProgramText, parseMemoryText } from "./isa.js";
+import { OPCODES, InstructionNode, parseProgramText, parseMemoryText } from "./isa.js";
 import {
   WordMemory,
   RegisterRenameFile,
@@ -11,15 +14,34 @@ import {
   ReservationStation,
 } from "./hardware.js";
 
+export const DEFAULT_LATENCIES = Object.freeze({
+  LOAD: 6,
+  STORE: 6,
+  BEQ: 1,
+  CALL_RET: 1,
+  ADD_SUB: 2,
+  NOR: 1,
+  MUL: 10,
+});
+
 export class TomasuloEngine {
   /**
    * @param {object} [options]
    * @param {number} [options.registerCount=9] Number of registers (r0..r8)
    * @param {number} [options.memorySize=65536] Number of memory words
+   * @param {"queue"|"control_flow"} [options.fetchMode="queue"] Instruction fetch/issue mode
+   * @param {object} [options.latencies] Custom latencies per functional group
    */
-  constructor({ registerCount = 9, memorySize = 65536 } = {}) {
+  constructor({
+    registerCount = 9,
+    memorySize = 65536,
+    fetchMode = "queue",
+    latencies = {},
+  } = {}) {
     this.registerCount = registerCount;
     this.memorySize = memorySize;
+    this.fetchMode = fetchMode;
+    this.latencies = { ...DEFAULT_LATENCIES, ...latencies };
 
     this.memory = new WordMemory(memorySize);
     this.registers = new RegisterRenameFile(registerCount);
@@ -33,6 +55,9 @@ export class TomasuloEngine {
 
     this.totalCycles = 0;
     this.pc = 0;
+    this.dynamicInstCounter = 0;
+    this.controlHazardStall = false;
+    this.halted = false;
     this.instructionsCompleted = 0;
     this.branchesEncountered = 0;
     this.branchMispredictions = 0;
@@ -40,27 +65,37 @@ export class TomasuloEngine {
     this._initReservationStations();
   }
 
+  setLatencies(newLatencies = {}) {
+    this.latencies = { ...this.latencies, ...newLatencies };
+    this._initReservationStations();
+  }
+
+  setFetchMode(mode) {
+    this.fetchMode = mode === "control_flow" ? "control_flow" : "queue";
+  }
+
   _initReservationStations() {
+    const L = this.latencies;
     this.groups = {
       LRS: [
-        new ReservationStation("LRS1", "Load", 6),
-        new ReservationStation("LRS2", "Load", 6),
+        new ReservationStation("LRS1", "Load", L.LOAD),
+        new ReservationStation("LRS2", "Load", L.LOAD),
       ],
       SRS: [
-        new ReservationStation("SRS1", "Store", 6),
-        new ReservationStation("SRS2", "Store", 6),
+        new ReservationStation("SRS1", "Store", L.STORE),
+        new ReservationStation("SRS2", "Store", L.STORE),
       ],
       BEQ: [
-        new ReservationStation("BEQ1", "Branch", 1),
-        new ReservationStation("BEQ2", "Branch", 1),
+        new ReservationStation("BEQ1", "Branch", L.BEQ),
+        new ReservationStation("BEQ2", "Branch", L.BEQ),
       ],
-      CALL_RET: [new ReservationStation("CALL_RET1", "Call/Return", 1)],
+      CALL_RET: [new ReservationStation("CALL_RET1", "Call/Return", L.CALL_RET)],
       ADD_SUB: [
-        new ReservationStation("ADD_SUB1", "ALU", 2),
-        new ReservationStation("ADD_SUB2", "ALU", 2),
+        new ReservationStation("ADD_SUB1", "ALU", L.ADD_SUB),
+        new ReservationStation("ADD_SUB2", "ALU", L.ADD_SUB),
       ],
-      NOR: [new ReservationStation("NOR1", "ALU", 1)],
-      MUL: [new ReservationStation("MUL1", "ALU", 10)],
+      NOR: [new ReservationStation("NOR1", "ALU", L.NOR)],
+      MUL: [new ReservationStation("MUL1", "ALU", L.MUL)],
     };
   }
 
@@ -110,19 +145,30 @@ export class TomasuloEngine {
     this.eventLog = [];
     this.totalCycles = 0;
     this.pc = 0;
+    this.dynamicInstCounter = 0;
+    this.controlHazardStall = false;
+    this.halted = false;
     this.instructionsCompleted = 0;
     this.branchesEncountered = 0;
     this.branchMispredictions = 0;
-    for (const station of this.allStations()) {
-      station.clear();
-    }
+    this._initReservationStations();
   }
 
   loadProgramFromText(sourceText) {
     const parsed = parseProgramText(sourceText);
     this.programSource = parsed;
     this.instructionQueue = [...parsed];
-    this.logEvent(0, "SYSTEM", `Loaded ${parsed.length} instruction(s) into queue.`);
+    this.pc = 0;
+    this.dynamicInstCounter = 0;
+    this.controlHazardStall = false;
+    this.halted = parsed.length === 0;
+    this.logEvent(
+      0,
+      "SYSTEM",
+      `Loaded ${parsed.length} instruction(s) [${
+        this.fetchMode === "control_flow" ? "PC Control-Flow Mode" : "Queue Mode"
+      }].`
+    );
     return parsed.length;
   }
 
@@ -142,6 +188,13 @@ export class TomasuloEngine {
   }
 
   issueStage() {
+    if (this.fetchMode === "control_flow") {
+      return this._issueControlFlow();
+    }
+    return this._issueQueue();
+  }
+
+  _issueQueue() {
     if (this.instructionQueue.length === 0) {
       return false;
     }
@@ -159,6 +212,7 @@ export class TomasuloEngine {
 
         const record = {
           id: nextInst.id,
+          pcIndex: nextInst.id,
           instruction: nextInst.format(),
           opcode: nextInst.opcode,
           station: station.name,
@@ -182,14 +236,86 @@ export class TomasuloEngine {
     return false;
   }
 
+  _issueControlFlow() {
+    if (this.halted || this.controlHazardStall) {
+      return false;
+    }
+    if (this.pc < 0 || this.pc >= this.programSource.length) {
+      this.halted = true;
+      return false;
+    }
+
+    const template = this.programSource[this.pc];
+    const dynId = ++this.dynamicInstCounter;
+    const dynInst = new InstructionNode({
+      id: dynId,
+      opcode: template.opcode,
+      dest: template.dest,
+      src1: template.src1,
+      src2: template.src2,
+      offset: template.offset,
+      label: template.label,
+      immediate: template.immediate,
+      rawText: template.rawText,
+      lineNumber: template.lineNumber,
+    });
+    dynInst.issuedPc = this.pc;
+
+    const pool = this._stationPoolFor(dynInst);
+    if (!pool || pool.length === 0) {
+      return false;
+    }
+
+    for (const station of pool) {
+      if (station.isFree()) {
+        station.issue(dynInst, this.registers);
+
+        const record = {
+          id: dynInst.id,
+          pcIndex: this.pc,
+          instruction: dynInst.format(),
+          opcode: dynInst.opcode,
+          station: station.name,
+          issue: this.totalCycles,
+          executeStart: null,
+          executeComplete: null,
+          writeback: null,
+        };
+        this.timingRecords.push(record);
+        this.timingByInstId.set(dynInst.id, record);
+
+        this.logEvent(
+          this.totalCycles,
+          "ISSUE",
+          `PC=${this.pc}: Issued [${dynInst.format()}] → ${station.name}`
+        );
+
+        if (
+          [OPCODES.BEQ, OPCODES.CALL, OPCODES.RET].includes(dynInst.opcode)
+        ) {
+          this.controlHazardStall = true;
+        } else {
+          this.pc += 1;
+        }
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   executeStage() {
     for (const station of this.allStations()) {
-      const prevPc = this.pc;
       const inst = station.instruction;
+      const basePc =
+        this.fetchMode === "control_flow" && inst && inst.issuedPc !== undefined
+          ? inst.issuedPc
+          : this.pc;
+
       const { newPc, event } = station.tickExecute(
         this.registers,
         this.memory,
-        this.pc,
+        basePc,
         this.cdb
       );
 
@@ -224,14 +350,33 @@ export class TomasuloEngine {
         }
       }
 
-      if (newPc !== null && newPc !== undefined && newPc !== this.pc) {
+      if (event === "completed" || event === "started_and_completed") {
         if (station.opcode === OPCODES.BEQ) {
           this.branchesEncountered += 1;
-          if (newPc !== prevPc + 1) {
+          if (newPc !== basePc + 1) {
             this.branchMispredictions += 1;
           }
         }
-        this.pc = newPc;
+
+        if (this.fetchMode === "control_flow") {
+          if (
+            [OPCODES.BEQ, OPCODES.CALL, OPCODES.RET].includes(station.opcode)
+          ) {
+            if (
+              station.opcode === OPCODES.RET &&
+              (newPc === 0 || newPc < 0 || newPc >= this.programSource.length)
+            ) {
+              this.halted = true;
+              this.controlHazardStall = false;
+              this.pc = newPc;
+            } else {
+              this.pc = newPc;
+              this.controlHazardStall = false;
+            }
+          }
+        } else if (newPc !== null && newPc !== undefined && newPc !== this.pc) {
+          this.pc = newPc;
+        }
       }
     }
   }
@@ -292,9 +437,24 @@ export class TomasuloEngine {
     return this.totalCycles;
   }
 
+  remainingQueueCount() {
+    if (this.fetchMode === "control_flow") {
+      if (this.halted) return 0;
+      return Math.max(0, this.programSource.length - this.pc);
+    }
+    return this.instructionQueue.length;
+  }
+
   isComplete() {
-    const queueEmpty = this.instructionQueue.length === 0;
     const allIdle = this.allStations().every((s) => !s.busy);
+    if (this.fetchMode === "control_flow") {
+      const fetchDone =
+        this.halted ||
+        (!this.controlHazardStall &&
+          (this.pc < 0 || this.pc >= this.programSource.length));
+      return fetchDone && allIdle;
+    }
+    const queueEmpty = this.instructionQueue.length === 0;
     return queueEmpty && allIdle;
   }
 

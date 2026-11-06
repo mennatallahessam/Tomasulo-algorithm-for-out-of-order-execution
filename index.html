@@ -53,12 +53,18 @@
     <!-- Control Toolbar -->
     <section class="control-bar">
       <div class="control-group">
-        <label for="preset-select">Sample Program:</label>
+        <label for="preset-select">Program:</label>
         <select id="preset-select">
           <option value="program.txt">program.txt (Basic RAW &amp; Memory)</option>
           <option value="program1.txt" selected>program1.txt (ALU, MUL, Branch &amp; r8)</option>
           <option value="program2.txt">program2.txt (Array Sum Loop &amp; CALL)</option>
           <option value="program3.txt">program3.txt (Hazards, Branch &amp; Loop)</option>
+        </select>
+
+        <label for="fetch-mode-select">Issue Mode:</label>
+        <select id="fetch-mode-select">
+          <option value="queue" selected>Queue Mode (Sequential Issue)</option>
+          <option value="control_flow">PC Control-Flow (Dynamic Branch/Loop)</option>
         </select>
 
         <label class="file-btn" for="program-upload">
@@ -96,6 +102,7 @@
       <button class="tab-btn active" data-tab-target="panel-dashboard">Live Hardware Dashboard</button>
       <button class="tab-btn" data-tab-target="panel-timing">Pipeline Timing &amp; Waterfall</button>
       <button class="tab-btn" data-tab-target="panel-memory">Word Memory Inspector</button>
+      <button class="tab-btn" data-tab-target="panel-config">Unit Latencies &amp; Config</button>
     </nav>
 
     <!-- Tab 1: Live Hardware Dashboard -->
@@ -132,7 +139,7 @@
           <div class="panel-card">
             <div class="panel-header">
               <h2>Reservation Stations &amp; Functional Units</h2>
-              <span class="panel-hint">LRS(6c) • SRS(6c) • BEQ(1c) • CALL/RET(1c) • ADD/SUB(2c) • NOR(1c) • MUL(10c)</span>
+              <span id="latency-summary-hint" class="panel-hint">LRS(6c) • SRS(6c) • BEQ(1c) • CALL/RET(1c) • ADD/SUB(2c) • NOR(1c) • MUL(10c)</span>
             </div>
             <div class="table-scroll">
               <table class="hw-table">
@@ -243,6 +250,50 @@
             </thead>
             <tbody id="memory-tbody"></tbody>
           </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 4: Unit Latencies & Hardware Config -->
+    <section id="panel-config" class="tab-panel">
+      <div class="panel-card">
+        <div class="panel-header">
+          <h2>Functional Unit Latency Configuration (Clock Cycles)</h2>
+          <span class="panel-hint">Changes re-initialize the simulation with the new hardware latencies</span>
+        </div>
+        <div class="config-grid">
+          <label class="config-item">
+            <span>Load Units (LRS1, LRS2)</span>
+            <input id="lat-load" type="number" min="1" max="50" value="6" />
+          </label>
+          <label class="config-item">
+            <span>Store Units (SRS1, SRS2)</span>
+            <input id="lat-store" type="number" min="1" max="50" value="6" />
+          </label>
+          <label class="config-item">
+            <span>Branch Units (BEQ1, BEQ2)</span>
+            <input id="lat-beq" type="number" min="1" max="50" value="1" />
+          </label>
+          <label class="config-item">
+            <span>Call / Return Unit (CALL_RET1)</span>
+            <input id="lat-call" type="number" min="1" max="50" value="1" />
+          </label>
+          <label class="config-item">
+            <span>Add / Sub Units (ADD_SUB1, ADD_SUB2)</span>
+            <input id="lat-add" type="number" min="1" max="50" value="2" />
+          </label>
+          <label class="config-item">
+            <span>Bitwise NOR Unit (NOR1)</span>
+            <input id="lat-nor" type="number" min="1" max="50" value="1" />
+          </label>
+          <label class="config-item">
+            <span>Multiply Unit (MUL1)</span>
+            <input id="lat-mul" type="number" min="1" max="50" value="10" />
+          </label>
+        </div>
+        <div class="control-group" style="margin-top: 8px;">
+          <button id="btn-apply-latencies" class="btn btn-primary">Apply Latencies &amp; Re-Initialize</button>
+          <button id="btn-default-latencies" class="btn btn-secondary">Restore Default Latencies</button>
         </div>
       </div>
     </section>

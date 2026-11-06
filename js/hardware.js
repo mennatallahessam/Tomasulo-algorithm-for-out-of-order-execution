@@ -428,3 +428,4 @@ export class ReservationStation {
     return "WAITING (Qj/Qk)";
   }
 }
+
