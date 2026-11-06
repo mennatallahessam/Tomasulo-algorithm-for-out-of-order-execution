@@ -1,138 +1,140 @@
-# Tomasulo Algorithm Simulator
+# Tomasulo Execution Studio — Out-of-Order Architecture Simulator
 
-> Out-of-order execution simulator with a Tkinter GUI: register renaming, reservation stations, a Common Data Bus, and instruction-level parallelism.
+> Interactive Web & Node.js simulator for **Tomasulo's dynamic instruction scheduling algorithm** featuring register renaming (`Qi`), reservation stations (`Vj`, `Vk`, `Qj`, `Qk`), a single-broadcast Common Data Bus (CDB), HTML5 pipeline waterfall visualization, and a command-line test runner.
 
-Built as part of a Computer Architecture course at The American University in Cairo.
+Built for the Computer Architecture course at The American University in Cairo.
 
 ---
 
 ## Table of Contents
 
 1. [Overview](#overview)
-2. [Features](#features)
+2. [Key Features](#key-features)
 3. [Background: Tomasulo's Algorithm](#background-tomasulos-algorithm)
-4. [Architecture of the Simulated Machine](#architecture-of-the-simulated-machine)
-5. [Instruction Set](#instruction-set)
+4. [Simulated Microarchitecture](#simulated-microarchitecture)
+5. [Instruction Set Architecture (ISA)](#instruction-set-architecture-isa)
 6. [Input File Formats](#input-file-formats)
-7. [Installation](#installation)
-8. [Usage](#usage)
-9. [GUI Guide](#gui-guide)
-10. [Simulation Pipeline (Per Cycle)](#simulation-pipeline-per-cycle)
-11. [Code Walkthrough](#code-walkthrough)
-12. [Sample Programs](#sample-programs)
-13. [Performance Metrics](#performance-metrics)
-14. [Known Limitations](#known-limitations)
-15. [Troubleshooting](#troubleshooting)
-16. [Repository Structure](#repository-structure)
-17. [Authors](#authors)
+7. [Quick Start (Web Studio & CLI)](#quick-start-web-studio--cli)
+8. [Web Studio Interface Guide](#web-studio-interface-guide)
+9. [Per-Cycle Pipeline Execution](#per-cycle-pipeline-execution)
+10. [Codebase Architecture](#codebase-architecture)
+11. [Sample Programs](#sample-programs)
+12. [Performance Metrics](#performance-metrics)
+13. [Repository Structure](#repository-structure)
+14. [Author](#author)
 
 ---
 
 ## Overview
 
-This project simulates a processor that uses **Tomasulo's algorithm** for dynamic scheduling. Instructions are issued in order to reservation stations, execute out of order as soon as their operands are available, and broadcast results on a single Common Data Bus (CDB). Register renaming through reservation-station tags removes WAR and WAW hazards. The simulator can be run headless from Python or through a GUI that shows each cycle.
+**Tomasulo Execution Studio** models a dynamically scheduled processor implementing **Tomasulo's out-of-order execution algorithm**. Instructions are fetched and issued in program order to functional-unit reservation stations, execute out of order as soon as their source operands are ready, and broadcast results over a contended **Common Data Bus (CDB)**. Register renaming via reservation-station tags eliminates false data dependencies (WAR and WAW hazards) while preserving true data dependencies (RAW).
 
-## Features
+The simulator is implemented in modular ES2022 JavaScript and runs both as:
+- An **interactive browser studio** ([`index.html`](index.html)) with real-time hardware tables, register rename cards, an HTML5 Canvas pipeline waterfall diagram, and a memory inspector.
+- A **headless Node.js CLI** ([`cli.js`](cli.js)) for automated batch runs and terminal timing tables.
 
-- **Out-of-order execution** with operand-ready triggered start.
-- **Register renaming** through reservation-station tags (`Qj`/`Qk`) and a register status table.
-- **Per-unit latencies** for loads, stores, adds, multiplies, NORs, branches and calls.
-- **Single Common Data Bus** with contention: only one result is broadcast per cycle, so other finished units wait.
-- **Tkinter GUI** with five tabs: control, status, timing diagram, memory viewer and statistics.
-- **Matplotlib charts**: instruction timing diagram and functional-unit utilization.
-- **Plain-text program and memory files**, with `#` comments.
-- **Four sample programs** and a sample memory file.
-- **Headless mode**: `simulator.py` can be run on its own.
+---
+
+## Key Features
+
+- **Out-of-Order Execution**: Instructions start execution the cycle their `Qj` and `Qk` operand tags clear.
+- **Full Register Renaming**: Architectural registers (`r0`–`r8`, extensible dynamically) track producer reservation-station tags (`Qi`) to resolve WAW and WAR hazards.
+- **Contended Single Common Data Bus (CDB)**: Only one completing station can broadcast on the CDB per cycle; simultaneous completions queue in `CDB WAIT` (`pendingBroadcast`).
+- **Configurable Functional Units & Latencies**: Dedicated reservation stations for Load, Store, Branch (`BEQ`), Call/Return (`CALL`/`RET`), Add/Subtract (`ADD`/`SUB`), Bitwise NOR (`NOR`), and Multiply (`MUL`).
+- **Interactive Web Studio**:
+  - Live telemetry ribbon (**State**, **Clock Cycle**, **Completed**, **IPC**, **Branch Accuracy**, **Queue**, **PC**, and **CDB Broadcast Monitor**).
+  - Step-by-step execution, variable-speed **Auto-Play**, and **Run All**.
+  - Built-in presets (`program.txt`, `program1.txt`, `program2.txt`, `program3.txt`) plus `.txt` file upload and live source editing.
+  - HTML5 Canvas **Instruction Pipeline Waterfall Diagram** and **Cycle Timing Table**.
+  - **65,536-Word Memory Inspector** with range filtering, non-zero toggle, Decimal, Hex, 16-bit Binary, and ASCII views.
+- **Zero External Build Dependencies**: Pure ES modules that run directly in modern browsers and Node.js.
+
+---
 
 ## Background: Tomasulo's Algorithm
 
-Tomasulo's algorithm was introduced in the IBM System/360 Model 91. Its core ideas are:
+Introduced by Robert Tomasulo in 1967 for the IBM System/360 Model 91 floating-point unit, Tomasulo's algorithm enables high instruction-level parallelism (ILP) without compiler scheduling:
 
-| Concept | Role |
+| Mechanism | Purpose |
 |---|---|
-| **Reservation stations** | Buffer instructions and operands next to each functional unit. |
-| **Register renaming** | A register that is waiting on a result holds the *tag* of the producing station instead of a value. |
-| **Common Data Bus** | Broadcasts `(tag, value)`. Every waiting station snoops it and captures matching operands. |
-| **Dynamic scheduling** | An instruction starts executing when all its operands are present, regardless of program order. |
+| **Reservation Stations** | Buffer issued instructions next to functional units along with resolved operand values (`Vj`, `Vk`) or unresolved producer tags (`Qj`, `Qk`). |
+| **Register Rename Table (`Qi`)** | Maps each architectural destination register to the reservation station tag that will produce its latest value. |
+| **Common Data Bus (CDB)** | Broadcasts `(sourceTag, value, destination)` to all reservation stations and the register file simultaneously in a single clock cycle. |
+| **In-Order Issue / Out-of-Order Execute** | Instructions issue in order when a station is free, execute as soon as operands arrive, and write back over the CDB. |
 
-An instruction goes through three phases:
+---
 
-1. **Issue**: take the next instruction in program order and allocate a free reservation station of the right type. Read ready operands, or record the tag of the producer. Claim the destination register.
-2. **Execute**: once both operands are available, count down the unit's latency.
-3. **Write result**: broadcast on the CDB, update the register file, and free the station.
+## Simulated Microarchitecture
 
-## Architecture of the Simulated Machine
+### Register File ([`RegisterRenameFile`](js/hardware.js))
 
-### Registers
+- **Registers**: `r0` through `r8` initialized by default (auto-expands if higher register indices are referenced).
+- **`r0`**: Hardwired to `0`. Reads always return `0`; writes and reservations on `r0` are ignored.
+- **`r1`**: Used implicitly as the link register (`CALL` writes `PC + 1` to `r1`; `RET` jumps to `r1`).
+- Each register entry stores `{ name, value, busy, tag }`.
 
-- Registers `r0`–`r7` (8 registers, created in [`RegisterBank`](memory.py)).
-- `r0` is hard-wired to **0**. Reads return 0 and writes are ignored.
-- `r1` is used implicitly as the **return address** register: `CALL` writes it, `RET` reads it.
-- Each register has a value, a *reserved* flag and a *tag* (name of the station that will write it).
+### Word Memory ([`WordMemory`](js/hardware.js))
 
-### Memory
+- **Capacity**: `65,536` signed 32-bit words (`Int32Array(65536)`), initialized to `0`.
+- Word-addressed: `LOAD r4, 4(r2)` accesses `MEM[r2 + 4]`.
 
-- `MemoryArray`: **65,536 word cells**, all initialised to 0.
-- Addresses are word indexes, not byte addresses. `LOAD r1, 4(r2)` reads cell `r2 + 4`.
+### Reservation Stations & Functional Units ([`TomasuloEngine`](js/engine.js))
 
-### Reservation stations and functional units
-
-Defined in [`simulator.py`](simulator.py) (`TomasuloSimulator.__init__`):
-
-| Group | Stations | Count | Latency (cycles) |
+| Functional Group | Reservation Stations | Station Count | Execution Latency (Cycles) |
 |---|---|---|---|
-| Load | `LRS1`, `LRS2` | 2 | 6 |
-| Store | `SRS1`, `SRS2` | 2 | 6 |
-| Branch (`BEQ`) | `BEQ1`, `BEQ2` | 2 | 1 |
-| Call/Return | `CALL_RET1` | 1 | 1 |
-| Add/Sub | `ADD_SUB1`, `ADD_SUB2` | 2 | 2 |
-| NOR | `NOR1` | 1 | 1 |
-| Multiply | `MUL1` | 1 | 10 |
+| **Load** | `LRS1`, `LRS2` | 2 | 6 |
+| **Store** | `SRS1`, `SRS2` | 2 | 6 |
+| **Branch (`BEQ`)** | `BEQ1`, `BEQ2` | 2 | 1 |
+| **Call / Return** | `CALL_RET1` | 1 | 1 |
+| **Add / Subtract** | `ADD_SUB1`, `ADD_SUB2` | 2 | 2 |
+| **Bitwise NOR** | `NOR1` | 1 | 1 |
+| **Multiply** | `MUL1` | 1 | 10 |
 
-Latencies and unit counts are set in one place in `TomasuloSimulator.__init__`. Edit the `ReservationUnit(name, type, latency)` calls to try other configurations.
+### Common Data Bus ([`CommonDataBus`](js/hardware.js))
 
-### Common Data Bus
+- Carries a single `{ value, sourceTag, destination }` broadcast per clock cycle.
+- If a functional unit completes execution while the CDB is already occupied in that cycle, the station transitions to `CDB WAIT` (`pendingBroadcast = true`) and broadcasts on a subsequent cycle.
 
-[`ResultBus`](memory.py) holds one `(value, source_tag, destination)` triple per cycle. If a unit finishes while the bus is occupied, it sets `pending_broadcast` and retries on a later cycle.
+---
 
-## Instruction Set
+## Instruction Set Architecture (ISA)
 
-| Instruction | Syntax | Semantics |
+Implemented in [`js/isa.js`](js/isa.js):
+
+| Opcode | Syntax | Operation / Semantics |
 |---|---|---|
-| `LOAD` | `LOAD rA, offset(rB)` | `rA = MEM[rB + offset]` |
-| `STORE` | `STORE rA, offset(rB)` | `MEM[rB + offset] = rA` |
-| `ADD` | `ADD rD, rS, rT` or `ADD rD, rS, imm` | `rD = rS + rT/imm` |
-| `SUB` | `SUB rD, rS, rT` or `SUB rD, rS, imm` | `rD = rS - rT/imm` |
-| `MUL` | `MUL rD, rS, rT` or `MUL rD, rS, imm` | `rD = (rS * rT/imm) & 0xFFFF` (low 16 bits) |
-| `NOR` | `NOR rD, rS, rT` or `NOR rD, rS, imm` | `rD = ~(rS \| rT/imm)` |
-| `BEQ` | `BEQ rS, rT, offset` | If `rS == rT`, `PC = PC + 1 + offset`, else `PC + 1` |
-| `CALL` | `CALL target` | `r1 = PC + 1`, then `PC = target` |
+| `LOAD` | `LOAD rD, offset(rB)` | `rD = MEM[rB + offset]` |
+| `STORE` | `STORE rS, offset(rB)` | `MEM[rB + offset] = rS` |
+| `ADD` | `ADD rD, rS, rT` or `ADD rD, rS, imm` | `rD = rS + (rT or imm)` |
+| `SUB` | `SUB rD, rS, rT` or `SUB rD, rS, imm` | `rD = rS - (rT or imm)` |
+| `MUL` | `MUL rD, rS, rT` or `MUL rD, rS, imm` | `rD = (rS * (rT or imm)) & 0xFFFF` (low 16 bits) |
+| `NOR` | `NOR rD, rS, rT` or `NOR rD, rS, imm` | `rD = ~(rS \| (rT or imm))` |
+| `BEQ` | `BEQ rS, rT, offset` | If `rS == rT` then `PC = PC + 1 + offset`, else `PC = PC + 1` |
+| `CALL` | `CALL target` | `r1 = PC + 1`; `PC = target` |
 | `RET` | `RET` | `PC = r1` |
 
-Syntax notes:
+### Syntax Rules
+- Opcodes and register names are case-insensitive.
+- Commas are optional separators (`ADD r1, r0, 10` and `ADD r1 r0 10` are both valid).
+- Immediate operands can be written as signed integers (`10`, `-4`) or prefixed with `#` (`#10`).
+- Inline and full-line comments start with `#`.
 
-- Opcodes are case-insensitive. Registers are written lowercase (`r0`..`r7`).
-- Commas between operands are optional (they are stripped by the parser).
-- Immediates are plain integers (`ADD r1, r0, 10`). Negative values are allowed.
-- `#` starts a comment, which can be on its own line or at the end of a line.
-- Lines that cannot be parsed are silently skipped by [`parse_instruction`](parser.py).
+---
 
 ## Input File Formats
 
-### Program file (`program*.txt`)
-
-One instruction per line:
+### Assembly Program File (`program*.txt`)
 
 ```text
 ADD r1, r0, 10    # r1 = 10
 ADD r2, r0, 20    # r2 = 20
 STORE r1, 0(r2)   # mem[20] = 10
-LOAD  r4, 0(r2)   # r4 = mem[20]
+LOAD r4, 0(r2)    # r4 = mem[20] = 10
 ```
 
-### Memory data file (`data.txt`)
+### Memory Initialization File (`data.txt`)
 
-Each line is `address value` (decimal, whitespace separated). Blank lines and lines starting with `#` are ignored:
+Whitespace-separated `address value` pairs (one per line):
 
 ```text
 10 42
@@ -140,214 +142,148 @@ Each line is `address value` (decimal, whitespace separated). Blank lines and li
 12 15
 ```
 
-The memory file is optional. Without it, all memory is 0.
+---
 
-## Installation
+## Quick Start (Web Studio & CLI)
 
-### Requirements
-
-- Python **3.8+** (developed on 3.11)
-- `tkinter` (bundled with the standard Python installers for Windows and macOS. On Debian/Ubuntu run `sudo apt install python3-tk`.)
-- `matplotlib` and `numpy` (used by the GUI charts)
-
-### Setup
+### 1. Clone the Repository
 
 ```bash
-git clone <your-repo-url>
-cd Tomasulo-Algorithm-Simulation
-
-# optional but recommended
-python -m venv .venv
-# Windows:      .venv\Scripts\activate
-# macOS/Linux:  source .venv/bin/activate
-
-pip install -r requirements.txt
+git clone https://github.com/mennatallahessam/Tomasulo-algorithm-for-out-of-order-execution.git
+cd Tomasulo-algorithm-for-out-of-order-execution
 ```
 
-## Usage
+### 2. Launch the Interactive Web Studio
 
-### GUI
+Serve the folder over any local HTTP server (required for ES modules):
 
 ```bash
-python main.py
+# Option A: Using Node.js / npx
+npm start
+
+# Option B: Using Python's built-in HTTP server
+python -m http.server 8000
 ```
 
-Typical workflow:
+Then open **`http://localhost:8000`** (or the port printed by `npx serve`) in your browser.
 
-1. Choose a **Program File** (e.g. `program1.txt`) using **Browse...**.
-2. Optionally choose a **Memory File** (e.g. `data.txt`).
-3. Click **Initialize**. The program is parsed and shown in the program pane.
-4. Click **Step** to advance one clock cycle, or **Run All** to simulate to completion.
-5. Open the other tabs to inspect state, timing, memory and statistics.
-6. Click **Reset** to start over.
-
-### Headless
-
-[`simulator.py`](simulator.py) contains a `__main__` block that runs `program.txt` to completion:
+### 3. Run from the Command Line (Node.js CLI)
 
 ```bash
-python simulator.py
+# Run a specific program and memory file
+node cli.js program1.txt data.txt
+
+# Run all 4 sample programs in batch
+npm test
 ```
 
-Or use it from your own code:
+---
 
-```python
-from simulator import TomasuloSimulator
+## Web Studio Interface Guide
 
-sim = TomasuloSimulator()
-sim.load_program("program1.txt")
-sim.load_memory_data("data.txt")   # optional
-sim.simulate()
-
-sim.display_timing_table()
-sim.display_register_status()
-print("Cycles:", sim.total_cycle)
-print("IPC:", sim.calculate_ipc())
-```
-
-To advance one cycle at a time:
-
-```python
-sim.total_cycle += 1
-sim.handle_writeback()
-sim.handle_execution()
-sim.issue_instruction()
-```
-
-## GUI Guide
-
-The interface uses a dark-slate studio layout with a persistent top header bar (showing live **Status**, **Cycle**, **Completed**, **IPC**, **Branch Accuracy**, and **In Queue** KPI cards) and a control toolbar for selecting program/memory files and running **Initialize**, **Step Cycle**, **Run All**, and **Reset**.
-
-| Tab | Contents |
+| Section / Tab | Description |
 |---|---|
-| **Live Execution Dashboard** | Side-by-side view of the assembly program source, cycle event log, Common Data Bus (CDB) broadcast banner, color-coded Reservation Stations table, and structured Register File & Rename Tags table. |
-| **Timing Diagram & Utilization** | Side-by-side Matplotlib charts showing the Instruction Pipeline Timing Diagram (Issue, Execute, Writeback) and Functional Unit Utilization percentages. |
-| **Memory Inspector** | Inspect word memory ranges with quick-range buttons, a *Non-zero cells only* filter, and Decimal, Hex, 16-bit Binary, and ASCII representations. |
+| **Top Telemetry Header** | Displays live **State** (`IDLE`, `READY`, `RUNNING`, `COMPLETED`), **Clock Cycle**, **Completed Instructions**, **IPC**, **Branch Accuracy**, **Queue Count**, and **PC**. |
+| **Control Toolbar** | Switch between sample programs (`program.txt`–`program3.txt`), upload custom `.txt` program or memory files, adjust auto-play speed, and trigger **Initialize**, **Step (+1 Cycle)**, **Auto Play**, **Run All**, or **Reset**. |
+| **CDB Broadcast Banner** | Highlights in green whenever a reservation station is actively broadcasting a result across the Common Data Bus. |
+| **Tab 1: Live Hardware Dashboard** | Editable assembly & memory panes, scrolling hardware event log, color-coded **Reservation Stations** table with per-unit progress bars, **Register & Rename Cards**, and **Functional Unit Utilization** bars. |
+| **Tab 2: Pipeline Timing & Waterfall** | HTML5 Canvas waterfall chart plotting Issue (blue circle), Execute span (amber bar), and Writeback/Commit (green diamond) per instruction, paired with a tabular cycle breakdown. |
+| **Tab 3: Word Memory Inspector** | Inspect any range of the 65,536-word memory array with quick-jump buttons (`0–40`, `96–128`), a **Non-zero words only** filter, and Signed Decimal, 16-bit Hex, 16-bit Binary, and ASCII columns. |
 
-## Simulation Pipeline (Per Cycle)
+---
 
-`TomasuloSimulator.simulate()` runs the following loop until the instruction queue is empty and every station is free. It stops after 1000 cycles as a safeguard.
+## Per-Cycle Pipeline Execution
 
-```text
-total_cycle += 1
-1. handle_writeback()     # stations snoop CDB, CDB is cleared, one finished station commits
-2. handle_execution()     # every station steps: start, count down, complete, broadcast on the CDB
-3. issue_instruction()    # issue the head of the instruction queue if a matching station is free
-```
+Each clock cycle (`TomasuloEngine.stepCycle()` in [`js/engine.js`](js/engine.js)) executes three phases in reverse pipeline order so results produced in cycle $t$ are snooped and committed in cycle $t + 1$:
 
 ```mermaid
 flowchart LR
-    Q[Instruction Queue] -->|issue in order| RS[Reservation Stations]
-    RS -->|operands ready| FU[Execute / latency countdown]
-    FU -->|result| CDB((Common Data Bus))
-    CDB -->|tag match| RS
-    CDB -->|commit| REG[Register File]
-    FU -->|STORE| MEM[(Memory)]
-    MEM -->|LOAD| FU
+    Q[Instruction Queue] -->|1. Issue in order| RS[Reservation Stations]
+    RS -->|2. Qj & Qk ready| EX[Functional Unit Execution]
+    EX -->|Result ready| CDB((Common Data Bus))
+    CDB -->|3. Tag snoop| RS
+    CDB -->|3. Commit| REG[Register Rename File]
+    EX -->|STORE| MEM[(65,536-Word Memory)]
+    MEM -->|LOAD| EX
 ```
 
-Per-instruction timing is stored in `instruction_timing[instr]` with the keys `issue`, `execute_start`, `execute_complete` and `writeback`.
+1. **`writebackStage()`**:
+   - All busy reservation stations snoop the active CDB broadcast and capture operands matching `Qj` or `Qk`.
+   - The CDB is cleared for the new cycle.
+   - Up to one station in `COMMIT READY` state writes its result to the register file and frees its station entry.
+2. **`executeStage()`**:
+   - Stations waiting in `pendingBroadcast` retry acquiring the CDB.
+   - Stations whose `Qj` and `Qk` tags are both `null` begin execution (`executeStart = cycle`) and decrement `remainingCycles`.
+   - When `remainingCycles` reaches `0`, the operation computes its result (`executeComplete = cycle`), updates `PC` on branches/calls/returns, and broadcasts on the CDB (or enters `CDB WAIT` if the bus is busy).
+3. **`issueStage()`**:
+   - Inspects the head of `instructionQueue`. If a reservation station in the matching pool is free, allocates the station, renames the destination register (`Qi = station.name`), and records `issue = cycle`.
 
-## Code Walkthrough
+---
 
-| File | Purpose |
+## Codebase Architecture
+
+| File | Responsibility |
 |---|---|
-| [`main.py`](main.py) | Creates the Tk root, builds `TomasuloGUI(root, TomasuloSimulator)` and starts the main loop. |
-| [`simulator.py`](simulator.py) | `TomasuloSimulator`: owns memory, registers, the instruction queue, the stations and the CDB. Implements issue, execute and write-back, program/memory loading and metrics. |
-| [`units.py`](units.py) | `ReservationUnit`: one station plus its functional unit. Handles operand capture (`allocate`, `listen`), readiness (`is_ready_to_execute`), execution (`step`) and commit. |
-| [`memory.py`](memory.py) | `MemoryArray` (65,536 cells), `RegisterBank` (values, reserved flags, tags) and `ResultBus` (the CDB). |
-| [`parser.py`](parser.py) | `Instruction` data class and `parse_instruction()` for text-to-instruction conversion. |
-| [`gui.py`](gui.py) | `TomasuloGUI`: the Tkinter and Matplotlib front end. |
+| [`index.html`](index.html) | Web application layout: telemetry header, control toolbar, CDB banner, and 3 workspace tabs. |
+| [`styles.css`](styles.css) | Dark hardware-studio theme, status badges, responsive grid layout, and table styling. |
+| [`js/isa.js`](js/isa.js) | `OPCODES`, `InstructionNode`, `parseInstructionLine()`, `parseProgramText()`, and `parseMemoryText()`. |
+| [`js/hardware.js`](js/hardware.js) | Hardware models: `WordMemory`, `RegisterRenameFile`, `CommonDataBus`, and `ReservationStation`. |
+| [`js/engine.js`](js/engine.js) | `TomasuloEngine`: manages reservation-station pools, cycle stepping (`writebackStage`, `executeStage`, `issueStage`), timing records, and performance metrics. |
+| [`js/presets.js`](js/presets.js) | Embedded sample programs (`program.txt`–`program3.txt`) and default memory image (`data.txt`). |
+| [`js/app.js`](js/app.js) | `TomasuloWebApp`: DOM state binding, auto-play timer, HTML5 Canvas waterfall chart renderer, and file upload handlers. |
+| [`cli.js`](cli.js) | Node.js command-line runner that executes `.txt` programs and prints formatted timing and register tables. |
 
-### Key `ReservationUnit` fields
-
-| Field | Meaning |
-|---|---|
-| `busy` | Station is in use. |
-| `opcode`, `dest` | Operation and destination register. |
-| `vj`, `vk` | Operand values, once known. |
-| `qj`, `qk` | Tags of the stations that will produce the operands, or `None` if ready. |
-| `remaining_cycles` | Latency countdown. |
-| `pending_broadcast` | Result is ready but the CDB was busy. |
-| `ready_to_commit` | Result broadcast, waiting to write back. |
+---
 
 ## Sample Programs
 
-| File | Demonstrates |
-|---|---|
-| `program.txt` | Short mix of `ADD`, `STORE`, `LOAD`, `SUB`, `NOR` and `RET`. Shows a RAW chain through memory. |
-| `program1.txt` | Register initialisation, store/load pairs, `ADD`/`MUL`/`SUB`/`NOR` dependency chains and a taken `BEQ`. |
-| `program2.txt` | Array setup in memory, a sum loop with `BEQ`, and `CALL`/`RET`. |
-| `program3.txt` | Independent and dependent operations, a forward branch, a loop and `CALL`/`RET`. |
-| `data.txt` | Example memory image: cells 10, 11 and 12 hold 42, 73 and 15. |
+| File | Description | Total Cycles | Completed Instructions | IPC |
+|---|---|---:|---:|---:|
+| [`program.txt`](program.txt) | Basic store/load memory chain, ALU dependencies (`ADD`, `SUB`, `NOR`), and `RET`. | 16 | 8 | 0.500 |
+| [`program1.txt`](program1.txt) | Register setup, memory stores/loads, parallel `ADD`/`MUL`/`SUB`/`NOR`, `BEQ`, and `r8` destination. | 30 | 19 | 0.633 |
+| [`program2.txt`](program2.txt) | Array initialization in memory (`mem[10..14]`), summation loop with `BEQ`, and `CALL`/`RET`. | 41 | 25 | 0.610 |
+| [`program3.txt`](program3.txt) | Independent vs. dependent ALU/load chains, forward branch, loop, and `CALL`/`RET`. | 53 | 29 | 0.547 |
+| [`data.txt`](data.txt) | Sample initial memory values (`mem[10]=42`, `mem[11]=73`, `mem[12]=15`). | — | — | — |
 
-> [!NOTE]
-> Some samples (for example `program1.txt`) use registers above `r7`. See [Known Limitations](#known-limitations).
+---
 
 ## Performance Metrics
 
-Computed in `TomasuloSimulator`:
+- **Total Cycles**: Total clock cycles elapsed until the instruction queue is empty and all reservation stations return to `FREE`.
+- **Instructions Completed**: Count of instructions that have completed the `WRITEBACK` (commit) stage.
+- **IPC (Instructions Per Cycle)**:
+  $$\text{IPC} = \frac{\text{Instructions Completed}}{\text{Total Cycles}}$$
+- **Branch Prediction Accuracy** (assuming static predict-not-taken, i.e., `PC + 1`):
+  $$\text{Accuracy} = \frac{\text{Branches Encountered} - \text{Taken Branches}}{\text{Branches Encountered}} \times 100\%$$
 
-| Metric | Formula |
-|---|---|
-| **Total cycles** | `total_cycle` |
-| **Instructions completed** | Incremented once per committed instruction. |
-| **IPC** | `instructions_completed / total_cycle` (`calculate_ipc`) |
-| **Branches encountered** | Count of `BEQ` instructions that changed the PC. |
-| **Branch prediction accuracy** | `(branches - mispredictions) / branches * 100`, or 100% if no branches (`get_branch_prediction_accuracy`). |
-
-## Known Limitations
-
-Documented here so results are interpreted correctly:
-
-- **Register count**: `RegisterBank` defaults to 8 registers (`r0`–`r7`), but some sample programs write `r8`. Raise the count with `RegisterBank(registers=16)` in `simulator.py` if you hit a `KeyError`.
-- **`requirements.txt`**: if it is not present, install the dependencies manually: `pip install matplotlib numpy`.
-- **In-order fetch queue**: instructions are issued from a queue built when the program is loaded. A `BEQ`/`CALL`/`RET` updates the simulated `pc`, but control flow does not re-fetch from the new PC, so loops and calls do not actually repeat or redirect the queue.
-- **No speculation**: there is no branch predictor or reorder buffer. The prediction accuracy figure is only a statistic of PC changes.
-- **Issue stalls**: issue is strictly in order, one instruction per cycle, and blocks when no matching station is free.
-- **Memory bounds**: addresses outside 0–65535 raise a Python `IndexError`. Memory-file errors cause `load_memory_data` to return `False`.
-- **Safety cap**: simulation stops after 1000 cycles.
-- **16-bit multiply**: `MUL` masks to 16 bits; the other operations are unbounded Python integers.
-
-## Troubleshooting
-
-| Problem | Fix |
-|---|---|
-| `ModuleNotFoundError: tkinter` | Install Tk: `sudo apt install python3-tk` (Linux) or reinstall Python with the *tcl/tk* option. |
-| `ModuleNotFoundError: matplotlib` / `numpy` | `pip install matplotlib numpy` |
-| `KeyError: 'r8'` | The program uses a register outside `r0`–`r7`. See [Known Limitations](#known-limitations). |
-| Instruction ignored | The parser skips lines it cannot parse. Check the spelling and the operand count. |
-| Memory file has no effect | Each line must be `address value` using integers. `load_memory_data` returns `False` on error. |
-| GUI does not open over SSH/WSL | Tkinter needs a display (use an X server or run natively). |
+---
 
 ## Repository Structure
 
 ```text
 .
-├── main.py           # Entry point: launches the GUI
-├── simulator.py      # Core Tomasulo simulation engine
-├── units.py          # Reservation stations / functional units
-├── memory.py         # Memory, register bank and Common Data Bus
-├── parser.py         # Instruction parser
-├── gui.py            # Tkinter + Matplotlib interface
-├── data.txt          # Sample memory contents
-├── program.txt       # Sample program
-├── program1.txt      # Test program 1
-├── program2.txt      # Test program 2
-├── program3.txt      # Test program 3
-├── requirements.txt  # Python dependencies
-└── README.md
+├── index.html          # Interactive Web Studio entry point
+├── styles.css          # Dark hardware-studio stylesheet
+├── cli.js              # Node.js command-line simulator runner
+├── package.json        # Scripts and ES module configuration
+├── js/
+│   ├── isa.js          # Instruction representation and parser
+│   ├── hardware.js     # Memory, RegisterRenameFile, CDB, ReservationStation
+│   ├── engine.js       # Core Tomasulo cycle simulation engine
+│   ├── presets.js      # Built-in sample programs and memory data
+│   └── app.js          # Browser UI controller and Canvas chart renderer
+├── data.txt            # Sample initial memory data
+├── program.txt         # Sample program 0
+├── program1.txt        # Sample program 1
+├── program2.txt        # Sample program 2
+├── program3.txt        # Sample program 3
+└── README.md           # Project documentation
 ```
 
-## Authors
+---
 
-Original authors:
+## Author
 
-- **Omar Abdelhady**: [@3-bhd](https://github.com/3-bhd)
-- **Muhammad Yasser Elghazaly**: [@my612](https://github.com/my612)
+- **Mennatallah Essam** — [@mennatallahessam](https://github.com/mennatallahessam)
 
-Maintained by:
-
-- **Mennatallah Essam**: [@mennatallahessam](https://github.com/mennatallahessam) (GUI redesign, display bug fixes, README, and repository maintenance)
-
-The American University in Cairo, Computer Architecture Course
+The American University in Cairo — Computer Architecture Course

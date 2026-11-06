@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tomasulo Execution Studio — Out-of-Order Architecture Simulator</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Top Telemetry Header -->
+    <header class="top-header">
+      <div class="brand-block">
+        <div class="brand-badge">OOO-SIM</div>
+        <div>
+          <h1>Tomasulo Execution Studio</h1>
+          <p class="subtitle">Dynamic Instruction Scheduling • Register Renaming • Common Data Bus Visualizer</p>
+        </div>
+      </div>
+
+      <div class="kpi-strip">
+        <div class="kpi-card">
+          <span class="kpi-label">STATE</span>
+          <span id="kpi-status" class="kpi-value status-pill badge-idle">IDLE</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">CLOCK CYCLE</span>
+          <span id="kpi-cycle" class="kpi-value">0</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">COMPLETED</span>
+          <span id="kpi-completed" class="kpi-value">0</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">IPC</span>
+          <span id="kpi-ipc" class="kpi-value">0.00</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">BRANCH ACC</span>
+          <span id="kpi-branch-acc" class="kpi-value">100.0%</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">QUEUE</span>
+          <span id="kpi-queue" class="kpi-value">0</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">PC</span>
+          <span id="kpi-pc" class="kpi-value">0</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Control Toolbar -->
+    <section class="control-bar">
+      <div class="control-group">
+        <label for="preset-select">Sample Program:</label>
+        <select id="preset-select">
+          <option value="program.txt">program.txt (Basic RAW &amp; Memory)</option>
+          <option value="program1.txt" selected>program1.txt (ALU, MUL, Branch &amp; r8)</option>
+          <option value="program2.txt">program2.txt (Array Sum Loop &amp; CALL)</option>
+          <option value="program3.txt">program3.txt (Hazards, Branch &amp; Loop)</option>
+        </select>
+
+        <label class="file-btn" for="program-upload">
+          Upload Program (.txt)
+          <input id="program-upload" type="file" accept=".txt" hidden />
+        </label>
+
+        <label class="file-btn" for="memory-upload">
+          Upload Memory (.txt)
+          <input id="memory-upload" type="file" accept=".txt" hidden />
+        </label>
+      </div>
+
+      <div class="control-group actions-group">
+        <div class="speed-control">
+          <label for="speed-range">Speed</label>
+          <input id="speed-range" type="range" min="1" max="10" value="6" />
+        </div>
+        <button id="btn-init" class="btn btn-secondary">Initialize</button>
+        <button id="btn-step" class="btn btn-primary">Step (+1 Cycle) ▶</button>
+        <button id="btn-play" class="btn btn-accent">Auto Play ▶</button>
+        <button id="btn-run-all" class="btn btn-secondary">Run All ⏩</button>
+        <button id="btn-reset" class="btn btn-danger">Reset ↺</button>
+      </div>
+    </section>
+
+    <!-- Common Data Bus Banner -->
+    <div id="cdb-banner" class="cdb-banner">
+      <span class="cdb-dot"></span>
+      <strong>Common Data Bus:</strong> Idle — available for next completing unit
+    </div>
+
+    <!-- Navigation Tabs -->
+    <nav class="tab-nav">
+      <button class="tab-btn active" data-tab-target="panel-dashboard">Live Hardware Dashboard</button>
+      <button class="tab-btn" data-tab-target="panel-timing">Pipeline Timing &amp; Waterfall</button>
+      <button class="tab-btn" data-tab-target="panel-memory">Word Memory Inspector</button>
+    </nav>
+
+    <!-- Tab 1: Live Hardware Dashboard -->
+    <main id="panel-dashboard" class="tab-panel active">
+      <div class="dashboard-grid">
+        <!-- Left Column: Program & Memory Source + Event Log -->
+        <div class="col-left">
+          <div class="panel-card">
+            <div class="panel-header">
+              <h2>Assembly Program Source</h2>
+              <span class="panel-hint">Editable — click Initialize after changes</span>
+            </div>
+            <textarea id="program-editor" class="code-editor" spellcheck="false"></textarea>
+          </div>
+
+          <div class="panel-card">
+            <div class="panel-header">
+              <h2>Initial Memory Image (addr value)</h2>
+              <span class="panel-hint">data.txt format</span>
+            </div>
+            <textarea id="memory-editor" class="code-editor memory-editor" spellcheck="false"></textarea>
+          </div>
+
+          <div class="panel-card log-card">
+            <div class="panel-header">
+              <h2>Cycle-by-Cycle Hardware Log</h2>
+            </div>
+            <div id="event-log" class="event-log"></div>
+          </div>
+        </div>
+
+        <!-- Center/Right Column: Reservation Stations + Registers + Utilization -->
+        <div class="col-right">
+          <div class="panel-card">
+            <div class="panel-header">
+              <h2>Reservation Stations &amp; Functional Units</h2>
+              <span class="panel-hint">LRS(6c) • SRS(6c) • BEQ(1c) • CALL/RET(1c) • ADD/SUB(2c) • NOR(1c) • MUL(10c)</span>
+            </div>
+            <div class="table-scroll">
+              <table class="hw-table">
+                <thead>
+                  <tr>
+                    <th>Station</th>
+                    <th>Unit Group</th>
+                    <th>Status</th>
+                    <th>Opcode</th>
+                    <th>Vj</th>
+                    <th>Vk</th>
+                    <th>Qj (Tag)</th>
+                    <th>Qk (Tag)</th>
+                    <th>Cycles Rem</th>
+                  </tr>
+                </thead>
+                <tbody id="rs-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="lower-split">
+            <div class="panel-card">
+              <div class="panel-header">
+                <h2>Architectural Registers &amp; Rename Table (Qi)</h2>
+                <span class="panel-hint">r0 hardwired to 0 • r1 link register</span>
+              </div>
+              <div id="register-grid" class="register-grid"></div>
+            </div>
+
+            <div class="panel-card">
+              <div class="panel-header">
+                <h2>Functional Unit Utilization</h2>
+              </div>
+              <div id="utilization-bars" class="utilization-bars"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Tab 2: Pipeline Timing & Waterfall -->
+    <section id="panel-timing" class="tab-panel">
+      <div class="timing-layout">
+        <div class="panel-card">
+          <div class="panel-header">
+            <h2>Instruction Pipeline Waterfall Diagram</h2>
+            <div class="legend-inline">
+              <span><i class="dot dot-issue"></i> Issue</span>
+              <span><i class="dot dot-exec"></i> Execute Span</span>
+              <span><i class="dot dot-wb"></i> Writeback (CDB Commit)</span>
+            </div>
+          </div>
+          <div class="canvas-wrap">
+            <canvas id="timing-canvas"></canvas>
+          </div>
+        </div>
+
+        <div class="panel-card">
+          <div class="panel-header">
+            <h2>Instruction Cycle Timing Table</h2>
+          </div>
+          <div class="table-scroll">
+            <table class="hw-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Instruction</th>
+                  <th>Station</th>
+                  <th>Issue Cycle</th>
+                  <th>Execute (Start → End)</th>
+                  <th>Writeback Cycle</th>
+                </tr>
+              </thead>
+              <tbody id="timing-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 3: Word Memory Inspector -->
+    <section id="panel-memory" class="tab-panel">
+      <div class="panel-card">
+        <div class="panel-header memory-toolbar">
+          <h2>Word Memory Inspector (65,536 Words)</h2>
+          <div class="mem-controls">
+            <label>Start: <input id="mem-start" type="number" value="0" min="0" max="65535" /></label>
+            <label>End: <input id="mem-end" type="number" value="40" min="0" max="65535" /></label>
+            <label class="chk-label">
+              <input id="mem-nonzero" type="checkbox" /> Non-zero words only
+            </label>
+            <button id="btn-mem-inspect" class="btn btn-primary">Inspect</button>
+            <button class="btn btn-secondary" data-mem-range="0-40">0–40</button>
+            <button class="btn btn-secondary" data-mem-range="96-128">96–128</button>
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table class="hw-table">
+            <thead>
+              <tr>
+                <th>Word Address</th>
+                <th>Signed Decimal</th>
+                <th>16-bit Hex</th>
+                <th>16-bit Binary</th>
+                <th>ASCII</th>
+              </tr>
+            </thead>
+            <tbody id="memory-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <footer class="app-footer">
+      <span>Tomasulo Algorithm Out-of-Order Execution Simulator • Authored by <strong>Mennatallah Essam</strong> (<a href="https://github.com/mennatallahessam" target="_blank" rel="noopener">@mennatallahessam</a>)</span>
+      <span>Computer Architecture — The American University in Cairo</span>
+    </footer>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
