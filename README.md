@@ -184,11 +184,12 @@ npm test
 | Section / Tab | Description |
 |---|---|
 | **Top Telemetry Header** | Displays live **State** (`IDLE`, `READY`, `RUNNING`, `COMPLETED`), **Clock Cycle**, **Completed Instructions**, **IPC**, **Branch Accuracy**, **Queue Count**, and **PC**. |
-| **Control Toolbar** | Switch between sample programs (`program.txt`–`program3.txt`), upload custom `.txt` program or memory files, adjust auto-play speed, and trigger **Initialize**, **Step (+1 Cycle)**, **Auto Play**, **Run All**, or **Reset**. |
+| **Control Toolbar** | Switch between sample programs (`program.txt`–`program3.txt`), toggle **Issue Mode** (*Queue Mode* vs. *PC Control-Flow*), upload custom `.txt` program or memory files, adjust auto-play speed, and trigger **Initialize**, **Step (+1 Cycle)**, **Auto Play**, **Run All**, or **Reset**. |
 | **CDB Broadcast Banner** | Highlights in green whenever a reservation station is actively broadcasting a result across the Common Data Bus. |
 | **Tab 1: Live Hardware Dashboard** | Editable assembly & memory panes, scrolling hardware event log, color-coded **Reservation Stations** table with per-unit progress bars, **Register & Rename Cards**, and **Functional Unit Utilization** bars. |
 | **Tab 2: Pipeline Timing & Waterfall** | HTML5 Canvas waterfall chart plotting Issue (blue circle), Execute span (amber bar), and Writeback/Commit (green diamond) per instruction, paired with a tabular cycle breakdown. |
 | **Tab 3: Word Memory Inspector** | Inspect any range of the 65,536-word memory array with quick-jump buttons (`0–40`, `96–128`), a **Non-zero words only** filter, and Signed Decimal, 16-bit Hex, 16-bit Binary, and ASCII columns. |
+| **Tab 4: Unit Latencies & Config** | Customize clock-cycle latencies for Load, Store, Branch, Call/Return, ADD/SUB, NOR, and Multiply units on the fly and re-initialize the hardware. |
 
 ---
 
@@ -232,6 +233,8 @@ flowchart LR
 | [`js/presets.js`](js/presets.js) | Embedded sample programs (`program.txt`–`program3.txt`) and default memory image (`data.txt`). |
 | [`js/app.js`](js/app.js) | `TomasuloWebApp`: DOM state binding, auto-play timer, HTML5 Canvas waterfall chart renderer, and file upload handlers. |
 | [`cli.js`](cli.js) | Node.js command-line runner that executes `.txt` programs and prints formatted timing and register tables. |
+| [`test.js`](test.js) | Automated unit & integration test suite verifying the parser, `r0` hardwiring, RAW/WAR/WAW hazard resolution, PC control-flow branching, and all sample programs. |
+| [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) | GitHub Actions CI/CD workflow that runs `test.js` and deploys the Web Studio to GitHub Pages. |
 
 ---
 
@@ -265,7 +268,10 @@ flowchart LR
 ├── index.html          # Interactive Web Studio entry point
 ├── styles.css          # Dark hardware-studio stylesheet
 ├── cli.js              # Node.js command-line simulator runner
+├── test.js             # Automated unit & integration test suite
 ├── package.json        # Scripts and ES module configuration
+├── .github/workflows/
+│   └── deploy.yml      # CI test runner & GitHub Pages deployment
 ├── js/
 │   ├── isa.js          # Instruction representation and parser
 │   ├── hardware.js     # Memory, RegisterRenameFile, CDB, ReservationStation
