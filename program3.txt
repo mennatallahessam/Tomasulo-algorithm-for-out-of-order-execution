@@ -1,0 +1,29 @@
+ADD r1, r0, 1     # r1 = 1
+ADD r2, r0, 2     # r2 = 2
+ADD r3, r0, 3     # r3 = 3
+ADD r4, r0, 4     # r4 = 4
+ADD r7, r0, 100   # r7 = 100 (base memory address)
+STORE r1, 0(r7)   # mem[100] = 1
+STORE r2, 4(r7)   # mem[104] = 2
+STORE r3, 8(r7)   # mem[108] = 3
+STORE r4, 12(r7)  # mem[112] = 4
+ADD r5, r1, r2    # r5 = r1 + r2 = 3
+LOAD r6, 8(r7)    # r6 = mem[108] = 3 (independent of previous)
+MUL r2, r5, r6    # r2 = r5 * r6 = 9 (depends on previous two)
+SUB r3, r6, r1    # r3 = r6 - r1 = 2 (depends on r6 and r1)
+BEQ r5, r6, 3     # Branch taken if r5 == r6 (both are 3)
+ADD r1, r0, 99    # Skipped if branch taken
+CALL 32           # Skipped if branch taken
+ADD r5, r0, 0     # Skipped if branch taken
+NOR r4, r2, r3    # r4 = ~(r2 | r3) = ~(9 | 2)
+MUL r5, r2, r4    # r5 = r2 * r4 (depends on previous)
+STORE r5, 16(r7)  # mem[116] = r5 (depends on previous)
+ADD r1, r0, 0     # r1 = 0 (loop counter)
+ADD r2, r0, 5     # r2 = 5 (loop limit)
+ADD r1, r1, 1     # Increment counter
+BEQ r1, r2, 3     # Exit loop when counter reaches limit
+LOAD r3, 0(r7)    # Load value from memory
+ADD r3, r3, r1    # Add counter to loaded value
+BEQ r0, r0, -4    # Jump back to loop start
+ADD r6, r0, 200   # r6 = 200
+RET               # Return to caller

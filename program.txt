@@ -1,0 +1,8 @@
+ADD r1, r0, r0    # r1 = 0
+STORE r1, 0(r2)   # mem[20] = 10
+LOAD r4, 0(r2)    # r4 = mem[20] = 10
+ADD r6, r4, r5    # r6 = r4 + r5 = 40
+SUB r8, r6, r4    # r8 = r6 - r4 = 30
+NOR r6, r6, r0    # r6 = ~(r6 | 0) = ~40
+ADD r7, r0, 50    # r7 = 50 (executed after return)
+RET               # Return to caller

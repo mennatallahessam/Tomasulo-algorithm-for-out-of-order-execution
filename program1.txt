@@ -1,0 +1,19 @@
+ADD r1, r0, r0    # r1 = 0
+ADD r2, r0, r0    # r2 = 0
+ADD r3, r0, r0    # r3 = 0
+ADD r1, r0, 10    # r1 = 10
+ADD r2, r0, 20    # r2 = 20
+STORE r1, 0(r2)   # mem[20] = 10
+ADD r3, r0, 30    # r3 = 30
+STORE r3, 4(r2)   # mem[24] = 30
+LOAD r4, 0(r2)    # r4 = mem[20] = 10
+LOAD r5, 4(r2)    # r5 = mem[24] = 30
+ADD r6, r4, r5    # r6 = r4 + r5 = 40
+MUL r7, r4, r5    # r7 = r4 * r5 = 300
+SUB r8, r6, r4    # r8 = r6 - r4 = 30
+NOR r6, r6, r0    # r6 = ~(r6 | 0) = ~40
+BEQ r0, r0, 2     # Should take branch (skip 2 instructions)
+ADD r1, r0, 99    # Should be skipped
+ADD r2, r0, 99    # Should be skipped
+ADD r1, r0, 50    # r1 = 50
+RET               # Return (undefined since we didn't call)
