@@ -17,11 +17,15 @@ Built for the Computer Architecture course at The American University in Cairo.
 7. [Quick Start (Web Studio & CLI)](#quick-start-web-studio--cli)
 8. [Web Studio Interface Guide](#web-studio-interface-guide)
 9. [Per-Cycle Pipeline Execution](#per-cycle-pipeline-execution)
-10. [Codebase Architecture](#codebase-architecture)
-11. [Sample Programs](#sample-programs)
-12. [Performance Metrics](#performance-metrics)
-13. [Repository Structure](#repository-structure)
-14. [Author](#author)
+10. [Issue Modes: Queue Mode vs. PC Control-Flow Mode](#issue-modes-queue-mode-vs-pc-control-flow-mode)
+11. [Customizing Functional Unit Latencies](#customizing-functional-unit-latencies)
+12. [Codebase Architecture](#codebase-architecture)
+13. [Sample Programs](#sample-programs)
+14. [Performance Metrics](#performance-metrics)
+15. [Automated Test Suite (`test.js`)](#automated-test-suite-testjs)
+16. [CI/CD & GitHub Pages Deployment](#cicd--github-pages-deployment)
+17. [Repository Structure](#repository-structure)
+18. [Author](#author)
 
 ---
 
@@ -217,7 +221,52 @@ flowchart LR
    - Stations whose `Qj` and `Qk` tags are both `null` begin execution (`executeStart = cycle`) and decrement `remainingCycles`.
    - When `remainingCycles` reaches `0`, the operation computes its result (`executeComplete = cycle`), updates `PC` on branches/calls/returns, and broadcasts on the CDB (or enters `CDB WAIT` if the bus is busy).
 3. **`issueStage()`**:
-   - Inspects the head of `instructionQueue`. If a reservation station in the matching pool is free, allocates the station, renames the destination register (`Qi = station.name`), and records `issue = cycle`.
+   - Inspects the head of `instructionQueue` (in Queue Mode) or `programSource[pc]` (in PC Control-Flow Mode). If a reservation station in the matching pool is free, allocates the station, renames the destination register (`Qi = station.name`), and records `issue = cycle`.
+
+---
+
+## Issue Modes: Queue Mode vs. PC Control-Flow Mode
+
+The simulator supports two selectable instruction fetch/issue modes in [`TomasuloEngine`](js/engine.js) and the Web Studio toolbar:
+
+| Feature | Queue Mode (`fetchMode: "queue"`) | PC Control-Flow Mode (`fetchMode: "control_flow"`) |
+|---|---|---|
+| **Instruction Fetch** | Issues instructions sequentially from a static FIFO queue loaded from the program file. | Fetches dynamically from `programSource[PC]` using the live Program Counter. |
+| **Control Hazards (`BEQ`, `CALL`, `RET`)** | Updates `PC` for telemetry and branch-accuracy statistics, but does not redirect or flush the static queue. | Stalls instruction issue (`controlHazardStall = true`) when a `BEQ`, `CALL`, or `RET` is issued until the branch/call station completes execution and resolves `newPc`. |
+| **Loops & Subroutines** | Each line in the file is issued once in file order. | Taken branches skip instructions (`PC = PC + 1 + offset`), backward branches execute loops across multiple iterations, `CALL` jumps to target while linking `r1 = PC + 1`, and `RET` jumps to `r1` (or halts when returning to `0` or out of bounds). |
+
+To switch modes in code:
+
+```javascript
+import { TomasuloEngine } from "./js/engine.js";
+
+const engine = new TomasuloEngine({
+  registerCount: 9,
+  fetchMode: "control_flow", // or "queue"
+});
+```
+
+---
+
+## Customizing Functional Unit Latencies
+
+Both the **Tab 4: Unit Latencies & Config** panel in the Web Studio and `TomasuloEngine` allow reconfiguring clock-cycle latencies per functional unit group:
+
+| Key | Functional Unit Group | Default Latency | Valid UI Range |
+|---|---|---:|---:|
+| `LOAD` | `LRS1`, `LRS2` | `6` cycles | `1`–`50` |
+| `STORE` | `SRS1`, `SRS2` | `6` cycles | `1`–`50` |
+| `BEQ` | `BEQ1`, `BEQ2` | `1` cycle | `1`–`50` |
+| `CALL_RET` | `CALL_RET1` | `1` cycle | `1`–`50` |
+| `ADD_SUB` | `ADD_SUB1`, `ADD_SUB2` | `2` cycles | `1`–`50` |
+| `NOR` | `NOR1` | `1` cycle | `1`–`50` |
+| `MUL` | `MUL1` | `10` cycles | `1`–`50` |
+
+- **In the Web Studio**: Open the **Unit Latencies & Config** tab, adjust any unit's cycle count, and click **Apply Latencies & Re-Initialize** (or **Restore Default Latencies**).
+- **Programmatically**:
+  ```javascript
+  engine.setLatencies({ MUL: 4, LOAD: 3, STORE: 3 });
+  ```
 
 ---
 
@@ -258,6 +307,39 @@ flowchart LR
   $$\text{IPC} = \frac{\text{Instructions Completed}}{\text{Total Cycles}}$$
 - **Branch Prediction Accuracy** (assuming static predict-not-taken, i.e., `PC + 1`):
   $$\text{Accuracy} = \frac{\text{Branches Encountered} - \text{Taken Branches}}{\text{Branches Encountered}} \times 100\%$$
+
+---
+
+## Automated Test Suite (`test.js`)
+
+[`test.js`](test.js) uses Node's built-in `node:assert/strict` module to verify core hardware invariants:
+
+1. **ISA Parser Verification**: Tests `LOAD`, `STORE`, immediate operands (`ADD r1, r0, 25`), negative branch offsets (`BEQ r3, r2, -4`), and inline `#` comments.
+2. **Hardwired `r0` Invariant**: Confirms writes and rename claims targeting `r0` are ignored and reads always return `0`.
+3. **RAW, WAR, and WAW Hazard Resolution**: Verifies that dependent instructions capture values over the CDB (RAW) and that a slow earlier instruction (`MUL r3`) does not overwrite a register already renamed and committed by a faster younger instruction (`ADD r3`).
+4. **Dynamic PC Control-Flow Redirection**: Confirms that in `control_flow` mode, a taken `BEQ r0, r0, 2` skips the two intervening instructions and resumes execution at `PC + 1 + 2`.
+5. **End-to-End Sample Program Regression**: Runs `program.txt`, `program1.txt`, `program2.txt`, and `program3.txt` with `data.txt` to completion and verifies all instructions commit.
+
+Run the suite locally with:
+
+```bash
+node test.js
+# or run unit tests + all 4 CLI simulation reports:
+npm test
+```
+
+---
+
+## CI/CD & GitHub Pages Deployment
+
+The GitHub Actions workflow in [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) runs automatically on every push to `main` (and via manual `workflow_dispatch`):
+
+1. **Checkout & Node 20 Setup**: Checks out the repository and configures Node.js 20.
+2. **Automated Verification Step**: Executes `node test.js` and `node cli.js program1.txt data.txt` to block broken builds from deploying.
+3. **GitHub Pages Artifact Upload & Deployment**: Packages the static web application (`index.html`, `styles.css`, `js/*.js`, and sample `.txt` files) and deploys it to GitHub Pages via `actions/deploy-pages@v4`.
+
+> [!TIP]
+> To activate live hosting on GitHub, open **Settings → Pages** in the repository and set **Build and deployment → Source** to **GitHub Actions**.
 
 ---
 
