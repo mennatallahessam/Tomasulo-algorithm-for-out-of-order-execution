@@ -78,12 +78,18 @@ export class RegisterRenameFile {
     const key = regName.toLowerCase();
     if (key === "r0") return;
     const entry = this._ensureRegister(key);
-    entry.value = Math.trunc(value);
-    // Clear reservation if it was waiting on this tag (or unconditional write)
-    if (sourceTag === null || entry.tag === sourceTag) {
-      entry.busy = false;
-      entry.tag = null;
+    if (sourceTag !== null) {
+      // Only update architectural register if it is still awaiting this producer tag (WAW protection)
+      if (entry.busy && entry.tag === sourceTag) {
+        entry.value = Math.trunc(value);
+        entry.busy = false;
+        entry.tag = null;
+      }
+      return;
     }
+    entry.value = Math.trunc(value);
+    entry.busy = false;
+    entry.tag = null;
   }
 
   claim(regName, stationTag) {
