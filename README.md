@@ -2,6 +2,8 @@
 
 > Interactive Web & Node.js simulator for **Tomasulo's dynamic instruction scheduling algorithm** featuring register renaming (`Qi`), reservation stations (`Vj`, `Vk`, `Qj`, `Qk`), a single-broadcast Common Data Bus (CDB), HTML5 pipeline waterfall visualization, and a command-line test runner.
 
+**Live Web Studio (GitHub Pages):** [https://mennatallahessam.github.io/Tomasulo-algorithm-for-out-of-order-execution/](https://mennatallahessam.github.io/Tomasulo-algorithm-for-out-of-order-execution/)
+
 Built for the Computer Architecture course at The American University in Cairo.
 
 ---
