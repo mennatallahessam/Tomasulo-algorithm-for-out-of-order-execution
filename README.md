@@ -216,13 +216,13 @@ sim.issue_instruction()
 
 ## GUI Guide
 
+The interface uses a dark-slate studio layout with a persistent top header bar (showing live **Status**, **Cycle**, **Completed**, **IPC**, **Branch Accuracy**, and **In Queue** KPI cards) and a control toolbar for selecting program/memory files and running **Initialize**, **Step Cycle**, **Run All**, and **Reset**.
+
 | Tab | Contents |
 |---|---|
-| **Control** | Program and memory file pickers, **Initialize / Step / Run All / Reset** buttons, current cycle counter, program listing and a scrolling simulation log. |
-| **Status** | Register file (values, or "busy, waiting for TAG") and a reservation-station table. |
-| **Timing** | Matplotlib timing diagram of each instruction's issue, execute and write-back cycles. |
-| **Memory** | View a range of memory cells with *Start Address* and *End Address* fields. |
-| **Statistics** | Performance metrics and a functional-unit utilization chart. |
+| **Live Execution Dashboard** | Side-by-side view of the assembly program source, cycle event log, Common Data Bus (CDB) broadcast banner, color-coded Reservation Stations table, and structured Register File & Rename Tags table. |
+| **Timing Diagram & Utilization** | Side-by-side Matplotlib charts showing the Instruction Pipeline Timing Diagram (Issue, Execute, Writeback) and Functional Unit Utilization percentages. |
+| **Memory Inspector** | Inspect word memory ranges with quick-range buttons, a *Non-zero cells only* filter, and Decimal, Hex, 16-bit Binary, and ASCII representations. |
 
 ## Simulation Pipeline (Per Cycle)
 
@@ -348,6 +348,6 @@ Original authors:
 
 Maintained by:
 
-- **Mennatallah Essam**: [@mennatallahessam](https://github.com/mennatallahessam) (README, documentation and repository maintenance)
+- **Mennatallah Essam**: [@mennatallahessam](https://github.com/mennatallahessam) (GUI redesign, display bug fixes, README, and repository maintenance)
 
 The American University in Cairo, Computer Architecture Course
