@@ -164,7 +164,7 @@ class TomasuloWebApp {
   _updateLatencyHint() {
     const L = this.engine.latencies;
     if (this.elLatencyHint) {
-      this.elLatencyHint.textContent = `LRS(${L.LOAD}c) • SRS(${L.STORE}c) • BEQ(${L.BEQ}c) • CALL/RET(${L.CALL_RET}c) • ADD/SUB(${L.ADD_SUB}c) • NOR(${L.NOR}c) • MUL(${L.MUL}c)`;
+      this.elLatencyHint.textContent = `Load: ${L.LOAD}c | Store: ${L.STORE}c | Branch: ${L.BEQ}c | Call/Ret: ${L.CALL_RET}c | Add/Sub: ${L.ADD_SUB}c | NOR: ${L.NOR}c | Multiply: ${L.MUL}c`;
     }
   }
 
@@ -181,7 +181,7 @@ class TomasuloWebApp {
     if (this.autoTimer) {
       clearInterval(this.autoTimer);
       this.autoTimer = null;
-      this.btnPlay.textContent = "Auto Play ▶";
+      this.btnPlay.textContent = "Auto-step";
       this.btnPlay.classList.remove("playing");
     }
   }
@@ -199,7 +199,7 @@ class TomasuloWebApp {
     }
 
     const intervalMs = Math.max(80, 900 - Number(this.elSpeedRange.value) * 80);
-    this.btnPlay.textContent = "Pause ⏸";
+    this.btnPlay.textContent = "Pause";
     this.btnPlay.classList.add("playing");
 
     this.autoTimer = setInterval(() => {
@@ -263,23 +263,23 @@ class TomasuloWebApp {
   }
 
   renderKpis() {
-    let statusText = "IDLE";
+    let statusText = "Idle";
     let statusClass = "badge-idle";
     if (this.initialized) {
       if (this.engine.isComplete() && this.engine.totalCycles > 0) {
-        statusText = "COMPLETED";
+        statusText = "Completed";
         statusClass = "badge-done";
       } else if (this.engine.totalCycles > 0) {
-        statusText = "RUNNING";
+        statusText = "Running";
         statusClass = "badge-running";
       } else {
-        statusText = "READY";
+        statusText = "Ready";
         statusClass = "badge-ready";
       }
     }
 
     this.kpiStatus.textContent = statusText;
-    this.kpiStatus.className = `kpi-value status-pill ${statusClass}`;
+    this.kpiStatus.className = `status-pill ${statusClass}`;
     this.kpiCycle.textContent = String(this.engine.totalCycles);
     this.kpiCompleted.textContent = String(this.engine.instructionsCompleted);
     this.kpiIpc.textContent = this.engine.calculateIpc().toFixed(2);
@@ -289,10 +289,10 @@ class TomasuloWebApp {
 
     const cdb = this.engine.cdb.peek();
     if (cdb.occupied) {
-      this.elCdbBanner.innerHTML = `<span class="cdb-dot active"></span><strong>CDB ACTIVE:</strong> Station <code>${cdb.sourceTag}</code> broadcasting value <code>${cdb.value}</code> → <code>${cdb.destination ?? "bus"}</code>`;
+      this.elCdbBanner.innerHTML = `<span class="cdb-lamp active"></span><span><strong>Common Data Bus active:</strong> Station <code>${cdb.sourceTag}</code> broadcasting value <code>${cdb.value}</code> to <code>${cdb.destination ?? "waiting stations"}</code></span>`;
       this.elCdbBanner.classList.add("cdb-live");
     } else {
-      this.elCdbBanner.innerHTML = `<span class="cdb-dot"></span><strong>Common Data Bus:</strong> Idle — available for next completing unit`;
+      this.elCdbBanner.innerHTML = `<span class="cdb-lamp"></span><span><strong>Common Data Bus:</strong> Idle — bus free for next completing functional unit</span>`;
       this.elCdbBanner.classList.remove("cdb-live");
     }
   }
@@ -301,12 +301,21 @@ class TomasuloWebApp {
     const stations = this.engine.allStations();
     this.elRsBody.innerHTML = stations
       .map((s) => {
-        const stateLabel = s.statusLabel();
+        let stateLabel = "Free";
         let rowClass = "rs-row-idle";
-        if (s.readyToCommit) rowClass = "rs-row-commit";
-        else if (s.pendingBroadcast) rowClass = "rs-row-cdb";
-        else if (s.executing) rowClass = "rs-row-exec";
-        else if (s.busy) rowClass = "rs-row-wait";
+        if (s.readyToCommit) {
+          stateLabel = "Commit ready";
+          rowClass = "rs-row-commit";
+        } else if (s.pendingBroadcast) {
+          stateLabel = "Waiting for CDB";
+          rowClass = "rs-row-cdb";
+        } else if (s.executing) {
+          stateLabel = "Executing";
+          rowClass = "rs-row-exec";
+        } else if (s.busy) {
+          stateLabel = "Waiting on tag";
+          rowClass = "rs-row-wait";
+        }
 
         const progressPct = s.busy
           ? Math.round(((s.latency - s.remainingCycles) / s.latency) * 100)
@@ -341,8 +350,8 @@ class TomasuloWebApp {
         const cls = r.busy ? "reg-card reg-busy" : "reg-card";
         return `<div class="${cls}">
           <div class="reg-header">
-            <span class="reg-name">${r.name.toUpperCase()}</span>
-            <span class="reg-state">${r.busy ? `WAIT: ${r.tag}` : "READY"}</span>
+            <span class="reg-name">${r.name}</span>
+            <span class="reg-state">${r.busy ? `Qi: ${r.tag}` : "Ready"}</span>
           </div>
           <div class="reg-val">${r.value}</div>
           <div class="reg-hex">${hex}</div>
@@ -371,20 +380,20 @@ class TomasuloWebApp {
   renderTimingTable() {
     const records = this.engine.timingRecords;
     if (records.length === 0) {
-      this.elTimingBody.innerHTML = `<tr><td colspan="6" class="empty-cell">No instructions issued yet. Click <strong>Step</strong> or <strong>Run All</strong>.</td></tr>`;
+      this.elTimingBody.innerHTML = `<tr><td colspan="6" class="empty-cell">No instructions have been issued yet. Use <strong>Step one cycle</strong> or <strong>Run to completion</strong> to begin.</td></tr>`;
       return;
     }
 
     this.elTimingBody.innerHTML = records
       .map(
         (r, i) => `<tr>
-          <td class="mono">#${i + 1}</td>
+          <td class="mono">${i + 1}</td>
           <td class="mono fw-bold">${r.instruction}</td>
           <td class="mono">${r.station}</td>
           <td class="mono badge-issue">${r.issue ?? "—"}</td>
           <td class="mono badge-exec">${
             r.executeStart !== null
-              ? `${r.executeStart} → ${r.executeComplete ?? "..."}`
+              ? `${r.executeStart} to ${r.executeComplete ?? "..."}`
               : "—"
           }</td>
           <td class="mono badge-wb">${r.writeback ?? "—"}</td>
@@ -403,8 +412,8 @@ class TomasuloWebApp {
     const width = canvas.parentElement.clientWidth || 720;
     const rowHeight = 30;
     const headerHeight = 38;
-    const footerHeight = 28;
-    const height = Math.max(260, headerHeight + records.length * rowHeight + footerHeight);
+    const footerHeight = 26;
+    const height = Math.max(250, headerHeight + records.length * rowHeight + footerHeight);
 
     canvas.width = width * dpr;
     canvas.height = height * dpr;
@@ -412,31 +421,31 @@ class TomasuloWebApp {
     canvas.style.height = `${height}px`;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    ctx.fillStyle = "#0b1120";
+    ctx.fillStyle = "#fcfaf5";
     ctx.fillRect(0, 0, width, height);
 
     if (records.length === 0) {
-      ctx.fillStyle = "#94a3b8";
-      ctx.font = "13px 'Segoe UI', sans-serif";
+      ctx.fillStyle = "#525866";
+      ctx.font = "13px 'IBM Plex Mono', monospace";
       ctx.textAlign = "center";
       ctx.fillText(
-        "Step or Run the simulation to render the instruction pipeline timing waterfall.",
+        "Step or run the simulation to plot the cycle-by-cycle instruction timing diagram.",
         width / 2,
         height / 2
       );
       return;
     }
 
-    const leftPad = 195;
+    const leftPad = 210;
     const rightPad = 24;
     const maxCycle = Math.max(this.engine.totalCycles + 1, 10);
     const plotWidth = Math.max(100, width - leftPad - rightPad);
     const xForCycle = (c) => leftPad + (c / maxCycle) * plotWidth;
 
-    ctx.strokeStyle = "#1e293b";
+    ctx.strokeStyle = "#ded9ce";
     ctx.lineWidth = 1;
-    ctx.font = "11px Consolas, monospace";
-    ctx.fillStyle = "#94a3b8";
+    ctx.font = "11px 'IBM Plex Mono', monospace";
+    ctx.fillStyle = "#525866";
     ctx.textAlign = "center";
 
     const step = maxCycle > 30 ? Math.ceil(maxCycle / 15) : 1;
@@ -453,12 +462,12 @@ class TomasuloWebApp {
       const yCenter = headerHeight + idx * rowHeight + rowHeight / 2;
 
       if (idx % 2 === 1) {
-        ctx.fillStyle = "rgba(30, 41, 59, 0.35)";
+        ctx.fillStyle = "#f2eee6";
         ctx.fillRect(0, headerHeight + idx * rowHeight, width, rowHeight);
       }
 
-      ctx.fillStyle = "#e2e8f0";
-      ctx.font = "11px Consolas, monospace";
+      ctx.fillStyle = "#16181d";
+      ctx.font = "11px 'IBM Plex Mono', monospace";
       ctx.textAlign = "left";
       ctx.fillText(`${idx + 1}. ${rec.instruction}`, 10, yCenter + 4);
 
@@ -466,15 +475,13 @@ class TomasuloWebApp {
         const endC = rec.executeComplete ?? this.engine.totalCycles;
         const x1 = xForCycle(rec.executeStart);
         const x2 = Math.max(x1 + 6, xForCycle(endC));
-        ctx.fillStyle = "#f59e0b";
-        ctx.beginPath();
-        ctx.roundRect(x1 - 3, yCenter - 5, x2 - x1 + 6, 10, 4);
-        ctx.fill();
+        ctx.fillStyle = "#b84a0e";
+        ctx.fillRect(x1 - 3, yCenter - 4, x2 - x1 + 6, 8);
       }
 
       if (rec.issue !== null) {
         const xi = xForCycle(rec.issue);
-        ctx.fillStyle = "#38bdf8";
+        ctx.fillStyle = "#0f4c81";
         ctx.beginPath();
         ctx.arc(xi, yCenter, 5, 0, Math.PI * 2);
         ctx.fill();
@@ -482,7 +489,7 @@ class TomasuloWebApp {
 
       if (rec.writeback !== null) {
         const xw = xForCycle(rec.writeback);
-        ctx.fillStyle = "#22c55e";
+        ctx.fillStyle = "#17643e";
         ctx.beginPath();
         ctx.moveTo(xw, yCenter - 6);
         ctx.lineTo(xw + 6, yCenter);
@@ -523,7 +530,7 @@ class TomasuloWebApp {
     this.elMemBody.innerHTML =
       rows.length > 0
         ? rows.join("")
-        : `<tr><td colspan="5" class="empty-cell">No matching memory words in range [${start}..${end}].</td></tr>`;
+        : `<tr><td colspan="5" class="empty-cell">No matching words in range ${start} to ${end}.</td></tr>`;
   }
 
   renderEventLog() {

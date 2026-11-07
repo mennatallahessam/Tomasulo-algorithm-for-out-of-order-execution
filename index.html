@@ -3,157 +3,158 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Tomasulo Execution Studio — Out-of-Order Architecture Simulator</title>
+  <title>Tomasulo 360/91 — Out-of-Order Execution Simulator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="app-shell">
-    <!-- Top Telemetry Header -->
-    <header class="top-header">
-      <div class="brand-block">
-        <div class="brand-badge">OOO-SIM</div>
-        <div>
-          <h1>Tomasulo Execution Studio</h1>
-          <p class="subtitle">Dynamic Instruction Scheduling • Register Renaming • Common Data Bus Visualizer</p>
-        </div>
+  <div class="workbench">
+    <!-- Blueprint Title & Telemetry Readout -->
+    <header class="blueprint-header">
+      <div class="title-cell">
+        <span class="model-tag">IBM 360/91 Architecture Lab</span>
+        <h1>Tomasulo Out-of-Order Execution Simulator</h1>
+        <p class="subtitle">Dynamic instruction scheduling with reservation stations, register rename tags, and a single Common Data Bus</p>
       </div>
 
-      <div class="kpi-strip">
-        <div class="kpi-card">
-          <span class="kpi-label">STATE</span>
-          <span id="kpi-status" class="kpi-value status-pill badge-idle">IDLE</span>
+      <dl class="telemetry-grid">
+        <div class="telemetry-cell">
+          <dt>State</dt>
+          <dd><span id="kpi-status" class="status-pill badge-idle">Idle</span></dd>
         </div>
-        <div class="kpi-card">
-          <span class="kpi-label">CLOCK CYCLE</span>
-          <span id="kpi-cycle" class="kpi-value">0</span>
+        <div class="telemetry-cell">
+          <dt>Clock cycle</dt>
+          <dd id="kpi-cycle">0</dd>
         </div>
-        <div class="kpi-card">
-          <span class="kpi-label">COMPLETED</span>
-          <span id="kpi-completed" class="kpi-value">0</span>
+        <div class="telemetry-cell">
+          <dt>Completed</dt>
+          <dd id="kpi-completed">0</dd>
         </div>
-        <div class="kpi-card">
-          <span class="kpi-label">IPC</span>
-          <span id="kpi-ipc" class="kpi-value">0.00</span>
+        <div class="telemetry-cell">
+          <dt>Instructions / cycle</dt>
+          <dd id="kpi-ipc">0.00</dd>
         </div>
-        <div class="kpi-card">
-          <span class="kpi-label">BRANCH ACC</span>
-          <span id="kpi-branch-acc" class="kpi-value">100.0%</span>
+        <div class="telemetry-cell">
+          <dt>Branch accuracy</dt>
+          <dd id="kpi-branch-acc">100.0%</dd>
         </div>
-        <div class="kpi-card">
-          <span class="kpi-label">QUEUE</span>
-          <span id="kpi-queue" class="kpi-value">0</span>
+        <div class="telemetry-cell">
+          <dt>In queue</dt>
+          <dd id="kpi-queue">0</dd>
         </div>
-        <div class="kpi-card">
-          <span class="kpi-label">PC</span>
-          <span id="kpi-pc" class="kpi-value">0</span>
+        <div class="telemetry-cell">
+          <dt>Program counter</dt>
+          <dd id="kpi-pc">0</dd>
         </div>
-      </div>
+      </dl>
     </header>
 
-    <!-- Control Toolbar -->
-    <section class="control-bar">
-      <div class="control-group">
-        <label for="preset-select">Program:</label>
+    <!-- Transport & Program Control Strip -->
+    <section class="transport-bar" aria-label="Simulation controls">
+      <div class="control-cluster">
+        <label for="preset-select">Program</label>
         <select id="preset-select">
-          <option value="program.txt">program.txt (Basic RAW &amp; Memory)</option>
-          <option value="program1.txt" selected>program1.txt (ALU, MUL, Branch &amp; r8)</option>
-          <option value="program2.txt">program2.txt (Array Sum Loop &amp; CALL)</option>
-          <option value="program3.txt">program3.txt (Hazards, Branch &amp; Loop)</option>
+          <option value="program.txt">program.txt — Memory RAW chain</option>
+          <option value="program1.txt" selected>program1.txt — ALU, multiply, branch &amp; r8</option>
+          <option value="program2.txt">program2.txt — Array sum loop &amp; call</option>
+          <option value="program3.txt">program3.txt — Hazards, branch &amp; loop</option>
         </select>
 
-        <label for="fetch-mode-select">Issue Mode:</label>
+        <label for="fetch-mode-select">Issue policy</label>
         <select id="fetch-mode-select">
-          <option value="queue" selected>Queue Mode (Sequential Issue)</option>
-          <option value="control_flow">PC Control-Flow (Dynamic Branch/Loop)</option>
+          <option value="queue" selected>Sequential queue</option>
+          <option value="control_flow">PC control-flow (live branches)</option>
         </select>
 
-        <label class="file-btn" for="program-upload">
-          Upload Program (.txt)
+        <label class="btn" for="program-upload">
+          Load program file
           <input id="program-upload" type="file" accept=".txt" hidden />
         </label>
 
-        <label class="file-btn" for="memory-upload">
-          Upload Memory (.txt)
+        <label class="btn" for="memory-upload">
+          Load memory file
           <input id="memory-upload" type="file" accept=".txt" hidden />
         </label>
       </div>
 
-      <div class="control-group actions-group">
+      <div class="control-cluster transport-actions">
         <div class="speed-control">
-          <label for="speed-range">Speed</label>
+          <label for="speed-range">Clock rate</label>
           <input id="speed-range" type="range" min="1" max="10" value="6" />
         </div>
-        <button id="btn-init" class="btn btn-secondary">Initialize</button>
-        <button id="btn-step" class="btn btn-primary">Step (+1 Cycle) ▶</button>
-        <button id="btn-play" class="btn btn-accent">Auto Play ▶</button>
-        <button id="btn-run-all" class="btn btn-secondary">Run All ⏩</button>
-        <button id="btn-reset" class="btn btn-danger">Reset ↺</button>
+        <button id="btn-init" class="btn">Load &amp; reset</button>
+        <button id="btn-step" class="btn btn-primary">Step one cycle</button>
+        <button id="btn-play" class="btn btn-accent">Auto-step</button>
+        <button id="btn-run-all" class="btn">Run to completion</button>
+        <button id="btn-reset" class="btn btn-quiet">Clear</button>
       </div>
     </section>
 
-    <!-- Common Data Bus Banner -->
-    <div id="cdb-banner" class="cdb-banner">
-      <span class="cdb-dot"></span>
-      <strong>Common Data Bus:</strong> Idle — available for next completing unit
+    <!-- Common Data Bus Wire Monitor -->
+    <div id="cdb-banner" class="cdb-wire" role="status" aria-live="polite">
+      <span class="cdb-lamp"></span>
+      <span><strong>Common Data Bus:</strong> Idle — bus free for next completing functional unit</span>
     </div>
 
-    <!-- Navigation Tabs -->
-    <nav class="tab-nav">
-      <button class="tab-btn active" data-tab-target="panel-dashboard">Live Hardware Dashboard</button>
-      <button class="tab-btn" data-tab-target="panel-timing">Pipeline Timing &amp; Waterfall</button>
-      <button class="tab-btn" data-tab-target="panel-memory">Word Memory Inspector</button>
-      <button class="tab-btn" data-tab-target="panel-config">Unit Latencies &amp; Config</button>
+    <!-- View Switcher -->
+    <nav class="view-tabs" aria-label="Simulator views">
+      <button class="tab-btn active" data-tab-target="panel-dashboard">Hardware workbench</button>
+      <button class="tab-btn" data-tab-target="panel-timing">Pipeline timing diagram</button>
+      <button class="tab-btn" data-tab-target="panel-memory">Word memory inspector</button>
+      <button class="tab-btn" data-tab-target="panel-config">Unit latencies</button>
     </nav>
 
-    <!-- Tab 1: Live Hardware Dashboard -->
+    <!-- View 1: Hardware Workbench -->
     <main id="panel-dashboard" class="tab-panel active">
-      <div class="dashboard-grid">
-        <!-- Left Column: Program & Memory Source + Event Log -->
-        <div class="col-left">
-          <div class="panel-card">
-            <div class="panel-header">
-              <h2>Assembly Program Source</h2>
-              <span class="panel-hint">Editable — click Initialize after changes</span>
-            </div>
-            <textarea id="program-editor" class="code-editor" spellcheck="false"></textarea>
-          </div>
+      <div class="workbench-grid">
+        <!-- Left Column: Assembly Source, Memory Init, Event Log -->
+        <aside class="source-column">
+          <section class="sheet-box">
+            <header class="sheet-header">
+              <h2>Assembly program</h2>
+              <span class="sheet-note">Click Load &amp; reset after editing</span>
+            </header>
+            <textarea id="program-editor" class="code-input" spellcheck="false" aria-label="Assembly program source"></textarea>
+          </section>
 
-          <div class="panel-card">
-            <div class="panel-header">
-              <h2>Initial Memory Image (addr value)</h2>
-              <span class="panel-hint">data.txt format</span>
-            </div>
-            <textarea id="memory-editor" class="code-editor memory-editor" spellcheck="false"></textarea>
-          </div>
+          <section class="sheet-box">
+            <header class="sheet-header">
+              <h2>Initial word memory</h2>
+              <span class="sheet-note">One address and value pair per line</span>
+            </header>
+            <textarea id="memory-editor" class="code-input memory-input" spellcheck="false" aria-label="Initial word memory"></textarea>
+          </section>
 
-          <div class="panel-card log-card">
-            <div class="panel-header">
-              <h2>Cycle-by-Cycle Hardware Log</h2>
-            </div>
+          <section class="sheet-box log-box">
+            <header class="sheet-header">
+              <h2>Cycle event trace</h2>
+            </header>
             <div id="event-log" class="event-log"></div>
-          </div>
-        </div>
+          </section>
+        </aside>
 
-        <!-- Center/Right Column: Reservation Stations + Registers + Utilization -->
-        <div class="col-right">
-          <div class="panel-card">
-            <div class="panel-header">
-              <h2>Reservation Stations &amp; Functional Units</h2>
-              <span id="latency-summary-hint" class="panel-hint">LRS(6c) • SRS(6c) • BEQ(1c) • CALL/RET(1c) • ADD/SUB(2c) • NOR(1c) • MUL(10c)</span>
-            </div>
-            <div class="table-scroll">
-              <table class="hw-table">
+        <!-- Right Column: Reservation Stations, Registers, Utilization -->
+        <section class="hardware-column">
+          <div class="sheet-box">
+            <header class="sheet-header">
+              <h2>Reservation stations</h2>
+              <span id="latency-summary-hint" class="sheet-note">Load: 6c | Store: 6c | Branch: 1c | Call/Ret: 1c | Add/Sub: 2c | NOR: 1c | Multiply: 10c</span>
+            </header>
+            <div class="table-wrap">
+              <table class="schematic-table">
                 <thead>
                   <tr>
                     <th>Station</th>
-                    <th>Unit Group</th>
-                    <th>Status</th>
-                    <th>Opcode</th>
+                    <th>Unit group</th>
+                    <th>State</th>
+                    <th>Operation</th>
                     <th>Vj</th>
                     <th>Vk</th>
-                    <th>Qj (Tag)</th>
-                    <th>Qk (Tag)</th>
-                    <th>Cycles Rem</th>
+                    <th>Qj</th>
+                    <th>Qk</th>
+                    <th>Remaining</th>
                   </tr>
                 </thead>
                 <tbody id="rs-tbody"></tbody>
@@ -161,57 +162,57 @@
             </div>
           </div>
 
-          <div class="lower-split">
-            <div class="panel-card">
-              <div class="panel-header">
-                <h2>Architectural Registers &amp; Rename Table (Qi)</h2>
-                <span class="panel-hint">r0 hardwired to 0 • r1 link register</span>
-              </div>
+          <div class="lower-bench">
+            <section class="sheet-box">
+              <header class="sheet-header">
+                <h2>Register file and rename tags (Qi)</h2>
+                <span class="sheet-note">r0 is hardwired to 0; r1 stores return address</span>
+              </header>
               <div id="register-grid" class="register-grid"></div>
-            </div>
+            </section>
 
-            <div class="panel-card">
-              <div class="panel-header">
-                <h2>Functional Unit Utilization</h2>
-              </div>
+            <section class="sheet-box">
+              <header class="sheet-header">
+                <h2>Functional unit load</h2>
+              </header>
               <div id="utilization-bars" class="utilization-bars"></div>
-            </div>
+            </section>
           </div>
-        </div>
+        </section>
       </div>
     </main>
 
-    <!-- Tab 2: Pipeline Timing & Waterfall -->
+    <!-- View 2: Pipeline Timing & Waterfall -->
     <section id="panel-timing" class="tab-panel">
-      <div class="timing-layout">
-        <div class="panel-card">
-          <div class="panel-header">
-            <h2>Instruction Pipeline Waterfall Diagram</h2>
+      <div class="timing-stack">
+        <div class="sheet-box">
+          <header class="sheet-header">
+            <h2>Instruction pipeline timing diagram</h2>
             <div class="legend-inline">
-              <span><i class="dot dot-issue"></i> Issue</span>
-              <span><i class="dot dot-exec"></i> Execute Span</span>
-              <span><i class="dot dot-wb"></i> Writeback (CDB Commit)</span>
+              <span><i class="swatch swatch-issue"></i> Issue cycle</span>
+              <span><i class="swatch swatch-exec"></i> Execution span</span>
+              <span><i class="swatch swatch-wb"></i> Writeback commit</span>
             </div>
-          </div>
+          </header>
           <div class="canvas-wrap">
             <canvas id="timing-canvas"></canvas>
           </div>
         </div>
 
-        <div class="panel-card">
-          <div class="panel-header">
-            <h2>Instruction Cycle Timing Table</h2>
-          </div>
-          <div class="table-scroll">
-            <table class="hw-table">
+        <div class="sheet-box">
+          <header class="sheet-header">
+            <h2>Cycle timing table</h2>
+          </header>
+          <div class="table-wrap">
+            <table class="schematic-table">
               <thead>
                 <tr>
-                  <th>#</th>
+                  <th>Order</th>
                   <th>Instruction</th>
                   <th>Station</th>
-                  <th>Issue Cycle</th>
-                  <th>Execute (Start → End)</th>
-                  <th>Writeback Cycle</th>
+                  <th>Issue</th>
+                  <th>Execute (start to end)</th>
+                  <th>Writeback</th>
                 </tr>
               </thead>
               <tbody id="timing-tbody"></tbody>
@@ -221,30 +222,30 @@
       </div>
     </section>
 
-    <!-- Tab 3: Word Memory Inspector -->
+    <!-- View 3: Word Memory Inspector -->
     <section id="panel-memory" class="tab-panel">
-      <div class="panel-card">
-        <div class="panel-header memory-toolbar">
-          <h2>Word Memory Inspector (65,536 Words)</h2>
+      <div class="sheet-box">
+        <header class="sheet-header">
+          <h2>Word memory inspector (65,536 words)</h2>
           <div class="mem-controls">
-            <label>Start: <input id="mem-start" type="number" value="0" min="0" max="65535" /></label>
-            <label>End: <input id="mem-end" type="number" value="40" min="0" max="65535" /></label>
+            <label>From <input id="mem-start" type="number" value="0" min="0" max="65535" /></label>
+            <label>To <input id="mem-end" type="number" value="40" min="0" max="65535" /></label>
             <label class="chk-label">
-              <input id="mem-nonzero" type="checkbox" /> Non-zero words only
+              <input id="mem-nonzero" type="checkbox" /> Show non-zero words only
             </label>
-            <button id="btn-mem-inspect" class="btn btn-primary">Inspect</button>
-            <button class="btn btn-secondary" data-mem-range="0-40">0–40</button>
-            <button class="btn btn-secondary" data-mem-range="96-128">96–128</button>
+            <button id="btn-mem-inspect" class="btn btn-primary">Show range</button>
+            <button class="btn" data-mem-range="0-40">Words 0–40</button>
+            <button class="btn" data-mem-range="96-128">Words 96–128</button>
           </div>
-        </div>
-        <div class="table-scroll">
-          <table class="hw-table">
+        </header>
+        <div class="table-wrap">
+          <table class="schematic-table">
             <thead>
               <tr>
-                <th>Word Address</th>
-                <th>Signed Decimal</th>
-                <th>16-bit Hex</th>
-                <th>16-bit Binary</th>
+                <th>Word address</th>
+                <th>Signed decimal</th>
+                <th>16-bit hex</th>
+                <th>16-bit binary</th>
                 <th>ASCII</th>
               </tr>
             </thead>
@@ -254,52 +255,52 @@
       </div>
     </section>
 
-    <!-- Tab 4: Unit Latencies & Hardware Config -->
+    <!-- View 4: Unit Latencies -->
     <section id="panel-config" class="tab-panel">
-      <div class="panel-card">
-        <div class="panel-header">
-          <h2>Functional Unit Latency Configuration (Clock Cycles)</h2>
-          <span class="panel-hint">Changes re-initialize the simulation with the new hardware latencies</span>
-        </div>
+      <div class="sheet-box">
+        <header class="sheet-header">
+          <h2>Functional unit execution latencies (clock cycles)</h2>
+          <span class="sheet-note">Applying changes resets the simulator with the updated latencies</span>
+        </header>
         <div class="config-grid">
           <label class="config-item">
-            <span>Load Units (LRS1, LRS2)</span>
+            <span>Load units (LRS1, LRS2)</span>
             <input id="lat-load" type="number" min="1" max="50" value="6" />
           </label>
           <label class="config-item">
-            <span>Store Units (SRS1, SRS2)</span>
+            <span>Store units (SRS1, SRS2)</span>
             <input id="lat-store" type="number" min="1" max="50" value="6" />
           </label>
           <label class="config-item">
-            <span>Branch Units (BEQ1, BEQ2)</span>
+            <span>Branch units (BEQ1, BEQ2)</span>
             <input id="lat-beq" type="number" min="1" max="50" value="1" />
           </label>
           <label class="config-item">
-            <span>Call / Return Unit (CALL_RET1)</span>
+            <span>Call and return unit (CALL_RET1)</span>
             <input id="lat-call" type="number" min="1" max="50" value="1" />
           </label>
           <label class="config-item">
-            <span>Add / Sub Units (ADD_SUB1, ADD_SUB2)</span>
+            <span>Add and subtract units (ADD_SUB1, ADD_SUB2)</span>
             <input id="lat-add" type="number" min="1" max="50" value="2" />
           </label>
           <label class="config-item">
-            <span>Bitwise NOR Unit (NOR1)</span>
+            <span>Bitwise NOR unit (NOR1)</span>
             <input id="lat-nor" type="number" min="1" max="50" value="1" />
           </label>
           <label class="config-item">
-            <span>Multiply Unit (MUL1)</span>
+            <span>Multiply unit (MUL1)</span>
             <input id="lat-mul" type="number" min="1" max="50" value="10" />
           </label>
         </div>
-        <div class="control-group" style="margin-top: 8px;">
-          <button id="btn-apply-latencies" class="btn btn-primary">Apply Latencies &amp; Re-Initialize</button>
-          <button id="btn-default-latencies" class="btn btn-secondary">Restore Default Latencies</button>
+        <div class="control-cluster" style="padding: 12px 14px; border-top: 1px solid var(--rule);">
+          <button id="btn-apply-latencies" class="btn btn-primary">Apply latencies and reset</button>
+          <button id="btn-default-latencies" class="btn">Restore defaults</button>
         </div>
       </div>
     </section>
 
-    <footer class="app-footer">
-      <span>Tomasulo Algorithm Out-of-Order Execution Simulator • Authored by <strong>Mennatallah Essam</strong> (<a href="https://github.com/mennatallahessam" target="_blank" rel="noopener">@mennatallahessam</a>)</span>
+    <footer class="blueprint-footer">
+      <span>Tomasulo Out-of-Order Execution Simulator — Authored by <strong>Mennatallah Essam</strong> (<a href="https://github.com/mennatallahessam" target="_blank" rel="noopener">@mennatallahessam</a>)</span>
       <span>Computer Architecture — The American University in Cairo</span>
     </footer>
   </div>
