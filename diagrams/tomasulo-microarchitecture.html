@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tomasulo 360/91 Microarchitecture · Architecture</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Serif:ital@0;1&family=Noto+Sans+KR:wght@400;500;600&family=Noto+Serif+KR:wght@400&family=Noto+Sans+TC:wght@400;500;600&family=Noto+Serif+TC:wght@400&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #eae6df;
+      --color-ink:     #16181d;
+      --color-muted:   #525866;
+      --color-accent:  #a8430c;
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', 'Noto Serif', 'Noto Serif KR', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+
+    .frame { max-width: 1200px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      color: var(--color-ink);
+      margin-bottom: 1.5rem;
+    }
+
+    svg { width: 100%; min-width: 960px; display: block; }
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Architecture · IBM 360/91 Dynamic Scheduling</p>
+    <h1>Tomasulo out-of-order execution microarchitecture</h1>
+
+    <div class="diagram-container">
+      <svg viewBox="0 0 960 520" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="tomasulo-arch-title tomasulo-arch-desc">
+        <title id="tomasulo-arch-title">Tomasulo out-of-order execution microarchitecture</title>
+        <desc id="tomasulo-arch-desc">Architecture diagram showing instructions issuing from the queue into reservation stations, executing in functional units, and broadcasting tagged results across the Common Data Bus back to the register rename file and waiting stations.</desc>
+        <defs>
+          <pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse">
+            <circle cx="1" cy="1" r="0.9" fill="rgba(22,24,29,0.10)"/>
+          </pattern>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#525866"/></marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#a8430c"/></marker>
+          <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#0f4c81"/></marker>
+        </defs>
+
+        <rect width="100%" height="100%" fill="#eae6df"/>
+        <rect width="100%" height="100%" fill="url(#dots)" opacity="0.55"/>
+
+        <!-- Zone 1: Reservation Stations (drawn before arrows and nodes) -->
+        <rect x="240" y="48" width="208" height="232" rx="8"
+              fill="rgba(22,24,29,0.02)" stroke="rgba(22,24,29,0.12)" stroke-width="0.8"/>
+        <rect x="272" y="52" width="144" height="12" rx="2" fill="#eae6df"/>
+        <text x="344" y="61" fill="#575d6b" font-size="7" font-family="'Geist Mono', monospace"
+              text-anchor="middle" letter-spacing="0.14em">RESERVATION STATIONS</text>
+
+        <!-- Zone 2: Functional Units -->
+        <rect x="504" y="48" width="192" height="232" rx="8"
+              fill="rgba(22,24,29,0.02)" stroke="rgba(22,24,29,0.12)" stroke-width="0.8"/>
+        <rect x="540" y="52" width="120" height="12" rx="2" fill="#eae6df"/>
+        <text x="600" y="61" fill="#575d6b" font-size="7" font-family="'Geist Mono', monospace"
+              text-anchor="middle" letter-spacing="0.14em">FUNCTIONAL UNITS</text>
+
+        <!-- Arrows first (drawn behind boxes) -->
+        <!-- 1. Instruction Queue -> ALU & Branch Stations (straight horizontal at y=104) -->
+        <line x1="184" y1="104" x2="256" y2="104" stroke="#0f4c81" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+
+        <!-- 2. Instruction Queue -> Load & Store Stations (elbow via x=216) -->
+        <path d="M 184,128 H 208 Q 216,128 216,136 V 204 Q 216,212 224,212 H 256"
+              fill="none" stroke="#0f4c81" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+
+        <!-- 3. Register Rename File -> Load & Store Stations (operands Vj/Vk & tags Qj/Qk) -->
+        <path d="M 184,336 H 208 Q 216,336 216,328 V 248 Q 216,240 224,240 H 256"
+              fill="none" stroke="#525866" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+        <!-- 4. ALU & Branch Stations -> Execution ALU (straight horizontal at y=112) -->
+        <line x1="432" y1="112" x2="520" y2="112" stroke="#525866" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+        <!-- 5. Load & Store Stations -> Memory Unit (straight horizontal at y=228) -->
+        <line x1="432" y1="228" x2="520" y2="228" stroke="#525866" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+        <!-- 6. Memory Unit -> Word Memory (load/store word access, straight vertical at x=600) -->
+        <line x1="600" y1="260" x2="600" y2="312" stroke="#525866" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+        <!-- 7. Execution ALU -> Common Data Bus (L-bend into CDB top edge at x=840) -->
+        <path d="M 680,112 H 832 Q 840,112 840,120 V 136"
+              fill="none" stroke="#a8430c" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+
+        <!-- 8. Memory Unit -> Common Data Bus (L-bend into CDB bottom edge at x=816) -->
+        <path d="M 680,228 H 808 Q 816,228 816,220 V 204"
+              fill="none" stroke="#a8430c" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+
+        <!-- 9. Common Data Bus -> Reservation Stations snoop path (dashed return via y=408 to x=344) -->
+        <path d="M 864,204 V 400 Q 864,408 856,408 H 352 Q 344,408 344,400 V 260"
+              fill="none" stroke="#525866" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+
+        <!-- 10. Common Data Bus -> Register Rename File commit path (primary focal bus via y=424 to x=108) -->
+        <path d="M 896,204 V 416 Q 896,424 888,424 H 116 Q 108,424 108,416 V 376"
+              fill="none" stroke="#a8430c" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+
+        <!-- Arrow labels (opaque paper masks with 6-10px gap from stroke) -->
+        <rect x="192" y="84" width="48" height="12" rx="2" fill="#eae6df"/>
+        <text x="216" y="93" fill="#0f4c81" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">ISSUE</text>
+
+        <rect x="128" y="280" width="80" height="12" rx="2" fill="#eae6df"/>
+        <text x="168" y="289" fill="#525866" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">VJ / QJ TAGS</text>
+
+        <rect x="448" y="92" width="56" height="12" rx="2" fill="#eae6df"/>
+        <text x="476" y="101" fill="#525866" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">DISPATCH</text>
+
+        <rect x="448" y="208" width="56" height="12" rx="2" fill="#eae6df"/>
+        <text x="476" y="217" fill="#525866" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">EFF ADDR</text>
+
+        <rect x="608" y="280" width="68" height="12" rx="2" fill="#eae6df"/>
+        <text x="642" y="289" fill="#525866" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">LOAD/STORE</text>
+
+        <rect x="724" y="92" width="68" height="12" rx="2" fill="#eae6df"/>
+        <text x="758" y="101" fill="#a8430c" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">RESULT</text>
+
+        <rect x="380" y="388" width="76" height="12" rx="2" fill="#eae6df"/>
+        <text x="418" y="397" fill="#525866" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">SNOOP QJ/QK</text>
+
+        <rect x="184" y="432" width="88" height="12" rx="2" fill="#eae6df"/>
+        <text x="228" y="441" fill="#a8430c" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">CDB WRITEBACK</text>
+
+        <!-- Node 1: Instruction Queue (input treatment) -->
+        <rect x="32" y="80" width="152" height="64" rx="6" fill="#eae6df"/>
+        <rect x="32" y="80" width="152" height="64" rx="6" fill="rgba(82,88,102,0.10)" stroke="#575d6b" stroke-width="1"/>
+        <rect x="40" y="88" width="36" height="12" rx="2" fill="transparent" stroke="rgba(87,93,107,0.40)" stroke-width="0.8"/>
+        <text x="58" y="97" fill="#575d6b" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">FETCH</text>
+        <text x="108" y="116" fill="#16181d" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Instruction Queue</text>
+        <text x="108" y="132" fill="#525866" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">FIFO · PC control</text>
+
+        <!-- Node 2: Register Rename File (focal treatment #1) -->
+        <rect x="32" y="312" width="152" height="64" rx="6" fill="#eae6df"/>
+        <rect x="32" y="312" width="152" height="64" rx="6" fill="rgba(168,67,12,0.08)" stroke="#a8430c" stroke-width="1.2"/>
+        <rect x="40" y="320" width="28" height="12" rx="2" fill="transparent" stroke="rgba(168,67,12,0.50)" stroke-width="0.8"/>
+        <text x="54" y="329" fill="#a8430c" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">REG</text>
+        <text x="108" y="348" fill="#16181d" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Register Rename File</text>
+        <text x="108" y="364" fill="#525866" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">r0–r8 · Qi tags</text>
+
+        <!-- Node 3: ALU & Branch Stations (backend treatment) -->
+        <rect x="256" y="80" width="176" height="64" rx="6" fill="#eae6df"/>
+        <rect x="256" y="80" width="176" height="64" rx="6" fill="#ffffff" stroke="#16181d" stroke-width="1"/>
+        <rect x="264" y="88" width="28" height="12" rx="2" fill="transparent" stroke="rgba(22,24,29,0.40)" stroke-width="0.8"/>
+        <text x="278" y="97" fill="#16181d" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">RS</text>
+        <text x="344" y="116" fill="#16181d" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">ALU &amp; Branch Stations</text>
+        <text x="344" y="132" fill="#525866" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">ADD_SUB · MUL · BEQ</text>
+
+        <!-- Node 4: Load & Store Stations (backend treatment) -->
+        <rect x="256" y="196" width="176" height="64" rx="6" fill="#eae6df"/>
+        <rect x="256" y="196" width="176" height="64" rx="6" fill="#ffffff" stroke="#16181d" stroke-width="1"/>
+        <rect x="264" y="204" width="28" height="12" rx="2" fill="transparent" stroke="rgba(22,24,29,0.40)" stroke-width="0.8"/>
+        <text x="278" y="213" fill="#16181d" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">BUF</text>
+        <text x="344" y="232" fill="#16181d" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Load &amp; Store Stations</text>
+        <text x="344" y="248" fill="#525866" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">LRS1–2 · SRS1–2</text>
+
+        <!-- Node 5: Execution ALU (backend treatment) -->
+        <rect x="520" y="80" width="160" height="64" rx="6" fill="#eae6df"/>
+        <rect x="520" y="80" width="160" height="64" rx="6" fill="#ffffff" stroke="#16181d" stroke-width="1"/>
+        <rect x="528" y="88" width="28" height="12" rx="2" fill="transparent" stroke="rgba(22,24,29,0.40)" stroke-width="0.8"/>
+        <text x="542" y="97" fill="#16181d" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">ALU</text>
+        <text x="600" y="116" fill="#16181d" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Execution Units</text>
+        <text x="600" y="132" fill="#525866" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">ADD 2c · MUL 10c · NOR 1c</text>
+
+        <!-- Node 6: Memory Unit (backend treatment) -->
+        <rect x="520" y="196" width="160" height="64" rx="6" fill="#eae6df"/>
+        <rect x="520" y="196" width="160" height="64" rx="6" fill="#ffffff" stroke="#16181d" stroke-width="1"/>
+        <rect x="528" y="204" width="28" height="12" rx="2" fill="transparent" stroke="rgba(22,24,29,0.40)" stroke-width="0.8"/>
+        <text x="542" y="213" fill="#16181d" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">LSU</text>
+        <text x="600" y="232" fill="#16181d" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Load / Store Unit</text>
+        <text x="600" y="248" fill="#525866" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">Base + offset · 6c</text>
+
+        <!-- Node 7: Word Memory (store treatment) -->
+        <rect x="520" y="312" width="160" height="64" rx="6" fill="#eae6df"/>
+        <rect x="520" y="312" width="160" height="64" rx="6" fill="rgba(22,24,29,0.05)" stroke="#525866" stroke-width="1"/>
+        <rect x="528" y="320" width="28" height="12" rx="2" fill="transparent" stroke="rgba(82,88,102,0.50)" stroke-width="0.8"/>
+        <text x="542" y="329" fill="#525866" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">RAM</text>
+        <text x="600" y="348" fill="#16181d" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Word Memory</text>
+        <text x="600" y="364" fill="#525866" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">65,536 words · 32-bit</text>
+
+        <!-- Node 8: Common Data Bus (focal treatment #2) -->
+        <rect x="752" y="136" width="176" height="68" rx="6" fill="#eae6df"/>
+        <rect x="752" y="136" width="176" height="68" rx="6" fill="rgba(168,67,12,0.08)" stroke="#a8430c" stroke-width="1.2"/>
+        <rect x="760" y="144" width="28" height="12" rx="2" fill="transparent" stroke="rgba(168,67,12,0.50)" stroke-width="0.8"/>
+        <text x="774" y="153" fill="#a8430c" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">CDB</text>
+        <text x="840" y="172" fill="#16181d" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Common Data Bus</text>
+        <text x="840" y="188" fill="#525866" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">(sourceTag, value, dest)</text>
+
+        <!-- Horizontal bottom legend strip -->
+        <line x1="32" y1="456" x2="928" y2="456" stroke="rgba(22,24,29,0.12)" stroke-width="0.8"/>
+        <text x="32" y="472" fill="#525866" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">LEGEND</text>
+
+        <rect x="32" y="484" width="14" height="10" rx="2" fill="rgba(168,67,12,0.08)" stroke="#a8430c" stroke-width="1.2"/>
+        <text x="52" y="492" fill="#525866" font-size="8.5" font-family="'Geist', sans-serif">Focal (Rename &amp; CDB)</text>
+
+        <rect x="192" y="484" width="14" height="10" rx="2" fill="#ffffff" stroke="#16181d" stroke-width="1"/>
+        <text x="212" y="492" fill="#525866" font-size="8.5" font-family="'Geist', sans-serif">Stations &amp; units</text>
+
+        <rect x="332" y="484" width="14" height="10" rx="2" fill="rgba(22,24,29,0.05)" stroke="#525866" stroke-width="1"/>
+        <text x="352" y="492" fill="#525866" font-size="8.5" font-family="'Geist', sans-serif">Memory store</text>
+
+        <rect x="456" y="484" width="14" height="10" rx="2" fill="rgba(82,88,102,0.10)" stroke="#575d6b" stroke-width="1"/>
+        <text x="476" y="492" fill="#525866" font-size="8.5" font-family="'Geist', sans-serif">Instruction fetch</text>
+
+        <line x1="596" y1="489" x2="624" y2="489" stroke="#0f4c81" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <text x="632" y="492" fill="#525866" font-size="8.5" font-family="'Geist', sans-serif">In-order issue</text>
+
+        <line x1="732" y1="489" x2="760" y2="489" stroke="#a8430c" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+        <text x="768" y="492" fill="#525866" font-size="8.5" font-family="'Geist', sans-serif">CDB broadcast</text>
+
+        <line x1="864" y1="489" x2="892" y2="489" stroke="#525866" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+        <text x="900" y="492" fill="#525866" font-size="8.5" font-family="'Geist', sans-serif">Tag snoop</text>
+      </svg>
+    </div>
+  </div>
+</body>
+</html>

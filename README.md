@@ -72,6 +72,10 @@ Introduced by Robert Tomasulo in 1967 for the IBM System/360 Model 91 floating-p
 
 ## Simulated Microarchitecture
 
+![Tomasulo 360/91 Out-of-Order Execution Microarchitecture](diagrams/tomasulo-microarchitecture.svg)
+
+> **Interactive Diagram:** Open [`diagrams/tomasulo-microarchitecture.html`](diagrams/tomasulo-microarchitecture.html) (or view it live at [https://mennatallahessam.github.io/Tomasulo-algorithm-for-out-of-order-execution/diagrams/tomasulo-microarchitecture.html](https://mennatallahessam.github.io/Tomasulo-algorithm-for-out-of-order-execution/diagrams/tomasulo-microarchitecture.html)).
+
 ### Register File ([`RegisterRenameFile`](js/hardware.js))
 
 - **Registers**: `r0` through `r8` initialized by default (auto-expands if higher register indices are referenced).
